@@ -1,0 +1,14 @@
+{
+  "name": "devops-lab-docs",
+  "version": "1.0.0",
+  "description": "Documentación técnica y bitácora del laboratorio DevOps con Podman y Microservicios",
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  }
+}

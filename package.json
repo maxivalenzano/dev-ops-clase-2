@@ -1,0 +1,11 @@
+{
+  "name": "dev-ops-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Podman Container & Microservices Lab",
+  "scripts": {
+    "docs:dev": "npm --prefix docs run docs:dev",
+    "docs:build": "npm --prefix docs run docs:build",
+    "docs:preview": "npm --prefix docs run docs:preview"
+  }
+}

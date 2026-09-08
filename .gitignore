@@ -1,0 +1,19 @@
+# Node / Frontend
+node_modules/
+dist/
+.env.local
+.env.*.local
+*.log
+
+# .NET / Backend
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
