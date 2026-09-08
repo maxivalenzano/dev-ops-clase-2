@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-08: Migración a .NET 10 (LTS) y Contenedorización Inmutable**](/bitacora/2026-09-08-migracion-dotnet-10)
+  - Actualización del microservicio backend a .NET 10 LTS preservando el diseño *single-file* (Minimal API).
+  - Actualización de imágenes base en `Containerfile` (`10.0-alpine`).
+  - Aplicación de principios DevOps: inmutabilidad del host VM y encapsulación hermética de dependencias.
+  - Actualización de `compose.yaml` y versionado semántico SemVer `2.0.0`.
+
 - [**2026-09-07: Infraestructura en Azure (VM Linux + ACR) y Estrategia Incremental**](/bitacora/2026-09-07-migracion-azure-vm-acr)
   - Despliegue de VM Linux (`Standard_B2als_v2`) y Azure Container Registry en `Chile Central`.
   - Configuración de Docker Engine y Docker Compose nativos en Ubuntu 24.04.

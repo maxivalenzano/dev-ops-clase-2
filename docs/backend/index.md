@@ -1,6 +1,6 @@
-# ⚙️ Microservicio Backend (.NET 8 Minimal API)
+# ⚙️ Microservicio Backend (.NET 10 Minimal API)
 
-El backend es una API REST construida con **.NET 8 LTS Minimal API**, diseñada específicamente para laboratorios de resiliencia, balanceo, monitoreo y concurrencia.
+El backend es una API REST construida con **.NET 10 LTS Minimal API**, diseñada específicamente para laboratorios de resiliencia, balanceo, monitoreo y concurrencia.
 
 ---
 

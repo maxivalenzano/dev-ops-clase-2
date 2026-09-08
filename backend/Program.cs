@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +28,7 @@ app.UseCors();
 // State for chaos and stress testing
 var isHealthy = true;
 var allocatedBuffers = new List<byte[]>();
-var bufferLock = new object();
+Lock bufferLock = new();
 var processStartTime = DateTime.UtcNow;
 
 // Logger middleware
@@ -54,10 +55,6 @@ IResult HandleRoot() =>
         timestamp = DateTime.UtcNow.ToString("o")
     });
 
-app.MapGet("/", HandleRoot);
-app.MapGet("/api", HandleRoot);
-app.MapGet("/api/", HandleRoot);
-
 // Health check endpoints
 IResult HandleHealth()
 {
@@ -80,11 +77,16 @@ IResult HandleHealth()
     }, statusCode: StatusCodes.Status500InternalServerError);
 }
 
+app.MapGet("/", HandleRoot);
 app.MapGet("/health", HandleHealth);
-app.MapGet("/api/health", HandleHealth);
+
+// API route group
+var api = app.MapGroup("/api");
+api.MapGet("/", HandleRoot);
+api.MapGet("/health", HandleHealth);
 
 // 1. Instance and system information
-app.MapGet("/api/info", () =>
+api.MapGet("/info", () =>
 {
     using var currentProcess = Process.GetCurrentProcess();
     var workingSet = currentProcess.WorkingSet64;
@@ -125,7 +127,7 @@ app.MapGet("/api/info", () =>
 });
 
 // 2. Delayed response (Timeout Testing)
-app.MapGet("/api/delay", async (int? ms) =>
+api.MapGet("/delay", async (int? ms) =>
 {
     var delayMs = ms ?? 3000;
     Console.WriteLine($"[{instanceName}] Simulating delay: sleeping for {delayMs}ms...");
@@ -142,7 +144,7 @@ app.MapGet("/api/delay", async (int? ms) =>
 });
 
 // 3. CPU Stress Testing (Intense computation loop)
-app.MapPost("/api/stress/cpu", (HttpRequest request, CpuStressRequest? body) =>
+api.MapPost("/stress/cpu", (HttpRequest request, CpuStressRequest? body) =>
 {
     var durationParam = request.Query["duration"].ToString();
     var durationMs = body?.Duration
@@ -152,11 +154,10 @@ app.MapPost("/api/stress/cpu", (HttpRequest request, CpuStressRequest? body) =>
 
     var sw = Stopwatch.StartNew();
     long operations = 0;
-    var random = new Random();
 
     while (sw.ElapsedMilliseconds < durationMs)
     {
-        _ = Math.Sqrt(random.NextDouble() * 1_000_000);
+        _ = Math.Sqrt(Random.Shared.NextDouble() * 1_000_000);
         operations++;
     }
 
@@ -171,7 +172,7 @@ app.MapPost("/api/stress/cpu", (HttpRequest request, CpuStressRequest? body) =>
 });
 
 // 4. Memory Stress Testing (Buffer Allocation to test container limits / OOM)
-app.MapPost("/api/stress/memory", (HttpRequest request, MemoryStressRequest? body) =>
+api.MapPost("/stress/memory", (HttpRequest request, MemoryStressRequest? body) =>
 {
     var mbParam = request.Query["mb"].ToString();
     var mb = body?.Mb
@@ -220,7 +221,7 @@ app.MapPost("/api/stress/memory", (HttpRequest request, MemoryStressRequest? bod
 });
 
 // 5. Memory release endpoint
-app.MapPost("/api/stress/memory/clear", () =>
+api.MapPost("/stress/memory/clear", () =>
 {
     int previousChunks;
     lock (bufferLock)
@@ -243,7 +244,7 @@ app.MapPost("/api/stress/memory/clear", () =>
 });
 
 // 6. Toggle Health Check status
-app.MapPost("/api/health/toggle", () =>
+api.MapPost("/health/toggle", () =>
 {
     isHealthy = !isHealthy;
     Console.WriteLine($"[{instanceName}] Health state toggled. New state: {(isHealthy ? "UP" : "DOWN")}");
