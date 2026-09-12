@@ -1,7 +1,7 @@
 # 🚀 2026-09-12: Diseño e Implementación de CI/CD en Azure DevOps y Versionado Semántico
 
 **Fecha**: 2026-09-12  
-**Hito**: Diseño de arquitectura de Integración y Entrega Continua (CI/CD) con **Azure DevOps Pipelines**, automatización de Versionado Semántico (SemVer) mediante Conventional Commits, construcción de artefactos OCI en Azure Container Registry (ACR) y despliegue continuo en VM Linux IaaS.
+**Hito**: Implementación exitosa del pipeline de Integración Continua (CI) en **Azure DevOps Pipelines**, automatización de Versionado Semántico (SemVer `2.0.1`) mediante Conventional Commits, publicación de imágenes OCI en Azure Container Registry (ACR) y resolución de dificultades en el flujo de despliegue.
 
 ---
 
@@ -9,8 +9,8 @@
 - Desmitificar la automatización: construir el camino con control total (sin "magia negra"), entendiendo cada etapa del ciclo de vida DevOps.
 - Diseñar un pipeline declarativo multi-stage (`azure-pipelines.yml`) que separe limpiamente las responsabilidades de **Integración Continua (CI)** y **Despliegue Continuo (CD)**.
 - Implementar una estrategia de **Versionado Semántico (SemVer)** determinístico y automatizado basado en la convención de mensajes Git (**Conventional Commits**).
-- Eliminar antipatrones de seguridad (evitar llaves SSH hardcodeadas o credenciales en texto plano) usando **Service Connections** y agentes seguros de Azure DevOps.
-- Automatizar la actualización del clúster de microservicios en la VM Linux (`Standard_B2als_v2`) mediante Docker Compose con verificación de salud (*Smoke Testing*).
+- Eliminar antipatrones de seguridad (evitar llaves SSH hardcodeadas o credenciales en texto plano) usando **Service Connections** en Azure DevOps.
+- Registrar y documentar las dificultades técnicas encontradas durante la puesta en marcha para capitalizar el aprendizaje.
 
 ---
 
@@ -22,70 +22,94 @@
  +-----------------------------------------------------------------------------------+
                                            |
                                            v
-   [ STAGE 1: VERSIONING ] 
-   - Analiza historial Git desde el último release.
-   - Calcula siguiente versión SemVer (MAJOR, MINOR o PATCH).
-   - Exporta variable $(SEMVER_TAG) para los stages siguientes.
+   [ STAGE 1: VERSIONING (SemVer) ] 
+   - Analiza historial Git completo (fetchDepth: 0).
+   - Parsea Conventional Commits (fix: -> PATCH, feat: -> MINOR, BREAKING -> MAJOR).
+   - Exporta variable $(SEMVER_TAG) y renombra la corrida vía ##vso[build.updatebuildnumber].
                                            |
                                            v
    [ STAGE 2: CI - BUILD & CONTAINERIZE ]
    +---------------------------------------+---------------------------------------+
    |              BACKEND (.NET 10)        |          FRONTEND (REACT 18)          |
-   | - Compilación y tests unitarios       | - Instalación de dependencias         |
-   | - Docker build (.NET Alpine)          | - Vite build y linter                 |
+   | - Validación de compilación Release   | - Instalación limpia: npm ci          |
+   | - Docker build (.NET Alpine)          | - Vite build estático                 |
    | - Tag: acr.../backend:$(SEMVER_TAG)   | - Docker build (Nginx SPA)            |
    |                                       | - Tag: acr.../frontend:$(SEMVER_TAG)  |
    +---------------------------------------+---------------------------------------+
                                            |
                                            v
    [ PUBLICACIÓN EN ACR ]
-   - Push autenticado vía Service Connection hacia acrdevopsvalenzano.azurecr.io
+   - Push autenticado vía Service Connection (acrdevopsvalenzano-sc) a acrdevopsvalenzano.azurecr.io
                                            |
                                            v
    [ STAGE 3: CD - DEPLOY TO AZURE VM ]
-   - Conexión al entorno de despliegue (Environment / VM).
-   - Inyección del nuevo tag en variables de compose.yaml.
-   - Pull de imágenes frescas desde ACR.
-   - Ejecución atómica: `docker compose up -d --remove-orphans`.
-   - Smoke Test de verificación contra Nginx (HTTP 200).
+   - Vinculado al Environment `devops-vm-env` para trazabilidad y auditoría.
+   - Inyección del nuevo tag en variables dinámicas de compose.yaml (${IMAGE_TAG}).
+   - Despliegue atómico con Docker Compose en la VM.
 ```
 
 ---
 
-## 🛠️ Fundamentos y Decisiones Técnicas
+## 🛠️ Acciones Realizadas
 
-### 1. ¿Por qué SemVer no es automático "por defecto"?
-Una máquina no puede inferir la intención arquitectónica de un cambio de código. La única forma de automatizarlo rigurosamente es establecer un contrato:
-- `fix: ...` -> Incrementa **PATCH** (ej: `2.0.0` -> `2.0.1`). Bug fixes sin cambios de API.
-- `feat: ...` -> Incrementa **MINOR** (ej: `2.0.0` -> `2.1.0`). Nuevas funcionalidades compatibles hacia atrás.
-- `feat!: ...` o `BREAKING CHANGE:` -> Incrementa **MAJOR** (ej: `2.0.0` -> `3.0.0`). Ruptura del contrato de API.
-
-### 2. Service Connection: Seguridad sin llaves expuestas
-Para que Azure DevOps interactúe con el registro (ACR) y la máquina virtual (VM), no se deben almacenar passwords en el repositorio. Se configuran **Service Connections** en el proyecto de Azure DevOps:
-- **Docker Registry Service Connection**: Permite a los agentes de compilación hacer `docker login` y `docker push` hacia `acrdevopsvalenzano.azurecr.io` de manera segura y temporal.
-- **Environment Virtual Machine / SSH Service Connection**: Permite delegar la orquestación del despliegue directamente en la VM `vm-dev-ops`.
-
-### 3. Principio de Inmutabilidad y Cero Residuos
-El servidor no compila código ni instala herramientas de desarrollo (ni Node.js ni el SDK de .NET están en el host Ubuntu). La VM solo ejecuta contenedores Docker inmutables descargados desde el registro privado.
+1. **Parametrización de Contenedores**:
+   - En `compose.yaml` se desacoplaron las versiones estáticas reemplazándolas por `${IMAGE_TAG:-...}` para backend y frontend.
+2. **Configuración en Azure DevOps**:
+   - Creación del proyecto `DevOps`.
+   - Configuración de la Service Connection `acrdevopsvalenzano-sc` tipo Docker Registry hacia el ACR de Azure.
+   - Creación del Environment `devops-vm-env`.
+3. **Pipeline as Code**:
+   - Creación de `azure-pipelines.yml` con triggers para `main`, `devel` y tags `v*`.
 
 ---
 
-## 📋 Checklist de Puesta en Marcha (Paso a Paso)
+## ⚠️ Dificultades Encontradas y Soluciones Técnicas (Troubleshooting)
 
-1. [ ] **Azure DevOps Portal**:
-   - Crear Organización y Proyecto (o vincular con el repositorio GitHub).
-   - Crear Service Connection para **ACR** (`acrdevopsvalenzano`).
-   - Crear Environment para la **VM** (`vm-dev-ops`).
-2. [ ] **Definición del Pipeline**:
-   - Crear `azure-pipelines.yml` en la raíz del repositorio.
-   - Probar validación de sintaxis YAML.
-3. [ ] **Ejecución y Pruebas**:
-   - Realizar commit con formato Conventional Commit.
-   - Observar la ejecución de los stages en tiempo real.
-   - Verificar imágenes en ACR con los nuevos tags generados.
-   - Verificar respuesta HTTP de la VM en `http://68.211.137.116`.
+Durante el proceso se presentaron tres dificultades reales de integración que aportaron valiosas lecciones arquitectónicas:
+
+### 1. Validación Estricta de Esquema: `Job DeployToVM: Environment is required`
+* **Síntoma**: Al ejecutar por primera vez el pipeline, Azure DevOps falló inmediatamente antes de iniciar cualquier stage con el error: `Job DeployToVM: Environment is required`.
+* **Causa Raíz**: En Azure Pipelines, la directiva `deployment:` no es un job regular; es una tarea especializada orientada a despliegues que **exige obligatoriamente** la propiedad `environment:` para vincular la auditoría. Como habíamos dejado comentada esa línea mientras definíamos el método de conexión, el validador de sintaxis rechazó el pipeline.
+* **Solución**: Se especificó explícitamente `environment: $(vmEnvironmentName)` en el job `DeployToVM`.
+
+### 2. Conflicto de Concurrencia en Git: `rejected (non-fast-forward)`
+* **Síntoma**: Al intentar enviar el fix mediante `git push origin devel`, Git rechazó la operación indicando que la punta de la rama remota estaba adelantada.
+* **Causa Raíz**: Al hacer clic en *"Save and run"* desde la interfaz web de Azure DevOps para dar de alta el pipeline, la plataforma generó automáticamente un commit en el repositorio remoto (`ebe1602 Set up CI with Azure Pipelines`). Como teníamos commits locales posteriores, se produjo una divergencia de ramas.
+* **Solución**: Se resolvió de manera idiomática aplicando rebase:
+  ```bash
+  git pull --rebase origin devel
+  git push origin devel
+  ```
+  Esto colocó nuestro commit de corrección (`bed6b6e fix(pipeline): ...`) limpiamente en la cima del historial sin generar commits de merge ruidosos.
+
+### 3. Barrera de Seguridad de Ambientes: `Environment devops-vm-env could not be found`
+* **Síntoma**: En la segunda ejecución, el pipeline falló indicando que el ambiente no existía o no estaba autorizado.
+* **Causa Raíz**: Azure DevOps implementa gobernanza estricta por defecto: un pipeline no puede desplegar a un ambiente arbitrario o inexistente sin que un administrador del proyecto lo declare previamente.
+* **Solución**: Se ingresó a la sección **Pipelines -> Environments** y se dio de alta el ambiente `devops-vm-env`, habilitando los permisos requeridos.
+
+---
+
+## 🧪 Pruebas y Resultados
+
+- **Ejecución `#2.0.1` Exitosa**:
+  - **Stage 1 (Semantic Versioning - 14s)**: Inspeccionó el commit `fix(pipeline): add required environment property to deployment job`. Reconoció el prefijo `fix:` e incrementó el PATCH sobre la base `2.0.0`, calculando automáticamente la versión `2.0.1` y renombrando la corrida.
+  - **Stage 2 (CI: Build & Push a ACR - 1m 46s)**:
+    - Verificó compilación de .NET 10 y React 18 en agentes limpios de Ubuntu.
+    - Se autenticó contra ACR vía Service Connection.
+    - Construyó y pusheó exitosamente las imágenes:
+      - `acrdevopsvalenzano.azurecr.io/backend:2.0.1` y `backend:latest`.
+      - `acrdevopsvalenzano.azurecr.io/frontend:2.0.1` y `frontend:latest`.
+  - **Stage 3 (CD: Despliegue en VM - 15s)**: Ejecutó el ciclo contra el Environment `devops-vm-env`.
+
+---
+
+## 💡 Lecciones Aprendidas & Conclusiones
+
+1. **Los orquestadores de CI/CD tienen contratos estrictos**: Un `deployment job` tiene un comportamiento y requisitos diferentes a un `job` tradicional; entender el metamodelo de la herramienta evita errores de esquema.
+2. **Git es el estado central**: Cuando se configuran pipelines desde UIs web, estas suelen escribir commits en el repositorio. Trabajar con rebase mantiene el árbol de historial lineal y profesional.
+3. **El valor del Versionado Semántico Automatizado**: En lugar de acordarse manualmente de cambiar un número en tres archivos distintos, la disciplina de **Conventional Commits** convierte a cada commit en la única fuente de verdad para el release de artefactos inmutables.
 
 ---
 
 ## 📌 Próximos Pasos
-- Completar la vinculación en el portal de Azure DevOps y ejecutar el primer pipeline end-to-end.
+- Registrar la VM `vm-dev-ops` como recurso activo dentro del Environment `devops-vm-env` para ejecutar el script de despliegue (`docker compose pull && docker compose up -d`) directamente en el servidor.
