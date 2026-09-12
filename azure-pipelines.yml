@@ -1,0 +1,202 @@
+# ==============================================================================
+# Pipeline CI/CD Multi-Stage - DevOps Lab
+# ==============================================================================
+# Flujo desacoplado:
+# 1. Versioning: Cálculo automático de SemVer mediante Conventional Commits.
+# 2. CI: Compilación, tests y empaquetado OCI hacia Azure Container Registry (ACR).
+# 3. CD: Despliegue continuo hacia la VM Ubuntu en Azure mediante Docker Compose.
+# ==============================================================================
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+      - devel
+  tags:
+    include:
+      - v*
+
+variables:
+  # Nombre de la Service Connection creada en Azure DevOps hacia tu ACR
+  acrServiceConnection: 'acrdevopsvalenzano-sc'
+  acrLoginServer: 'acrdevopsvalenzano.azurecr.io'
+  # Nombre del Environment de Azure DevOps donde está registrada tu VM
+  vmEnvironmentName: 'devops-vm-env'
+
+stages:
+  # ----------------------------------------------------------------------------
+  # STAGE 1: CÁLCULO DE VERSIONADO SEMÁNTICO (SemVer)
+  # ----------------------------------------------------------------------------
+  - stage: Versioning
+    displayName: '1. Semantic Versioning'
+    jobs:
+      - job: CalculateSemVer
+        displayName: 'Calcular Versión SemVer'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 0 # Trae historial completo de Git para tags y commits
+
+          - bash: |
+              set -euo pipefail
+
+              echo "==> Evaluando estrategia de versionado..."
+              SOURCE_BRANCH="$(Build.SourceBranch)"
+              COMMIT_MSG="$(git log -1 --pretty=%B)"
+              echo "Rama/Ref: $SOURCE_BRANCH"
+              echo "Último commit: $COMMIT_MSG"
+
+              # 1. Si el trigger fue un Tag de Git (ej: v2.1.0), usar ese tag directamente
+              if [[ "$SOURCE_BRANCH" == refs/tags/v* ]]; then
+                SEMVER_TAG="${SOURCE_BRANCH#refs/tags/v}"
+                echo "Tag detectado en Git: $SEMVER_TAG"
+              else
+                # 2. Buscar el último tag SemVer existente o arrancar en 2.0.0
+                LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "v2.0.0")
+                CLEAN_TAG="${LAST_TAG#v}"
+                echo "Último tag base: $CLEAN_TAG"
+
+                # Parsear MAJOR.MINOR.PATCH
+                IFS='.' read -r -a VERSION_PARTS <<< "$CLEAN_TAG"
+                MAJOR="${VERSION_PARTS[0]:-2}"
+                MINOR="${VERSION_PARTS[1]:-0}"
+                PATCH="${VERSION_PARTS[2]:-0}"
+
+                # 3. Evaluar Conventional Commits
+                if echo "$COMMIT_MSG" | grep -Eq "^(feat!|fix!|BREAKING CHANGE:)"; then
+                  echo "Impacto detectado: MAJOR (Breaking change)"
+                  MAJOR=$((MAJOR + 1))
+                  MINOR=0
+                  PATCH=0
+                elif echo "$COMMIT_MSG" | grep -Eq "^feat(\(.*\))?:"; then
+                  echo "Impacto detectado: MINOR (Nueva feature retrocompatible)"
+                  MINOR=$((MINOR + 1))
+                  PATCH=0
+                else
+                  echo "Impacto detectado: PATCH (Bugfix o cambio menor)"
+                  PATCH=$((PATCH + 1))
+                fi
+
+                SEMVER_TAG="${MAJOR}.${MINOR}.${PATCH}"
+              fi
+
+              echo "==> Versión SemVer final calculada: $SEMVER_TAG"
+
+              # Exportar variable de salida para los siguientes stages
+              echo "##vso[task.setvariable variable=SEMVER_TAG;isOutput=true]$SEMVER_TAG"
+              # Actualizar el nombre visible del build en Azure DevOps
+              echo "##vso[build.updatebuildnumber]$SEMVER_TAG"
+            name: VersionOutput
+            displayName: 'Determinar Tag SemVer'
+
+  # ----------------------------------------------------------------------------
+  # STAGE 2: INTEGRACIÓN CONTINUA (CI) - TEST & BUILD DE IMÁGENES DOCKER
+  # ----------------------------------------------------------------------------
+  - stage: CI
+    displayName: '2. CI: Build & Push a ACR'
+    dependsOn: Versioning
+    variables:
+      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
+    jobs:
+      - job: BuildAndPush
+        displayName: 'Compilar y Publicar Contenedores'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: UseDotNet@2
+            displayName: 'Instalar .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.x'
+            continueOnError: true # No bloquea si el agente de Azure aún no tiene el feed oficial
+
+          # 1. Validación de compilación de Backend
+          - bash: |
+              echo "==> Verificando compilación de Backend .NET 10..."
+              dotnet build backend/Backend.csproj -c Release
+            displayName: 'Validar Backend (.NET 10)'
+
+          # 2. Validación de compilación de Frontend
+          - bash: |
+              echo "==> Verificando dependencias y build de Frontend React..."
+              cd frontend
+              npm ci
+              npm run build
+            displayName: 'Validar Frontend (React 18 / Vite)'
+
+          # 3. Autenticación contra Azure Container Registry
+          - task: Docker@2
+            displayName: 'Docker Login a ACR'
+            inputs:
+              command: 'login'
+              containerRegistry: $(acrServiceConnection)
+
+          # 4. Construcción y publicación de Backend a ACR
+          - bash: |
+              echo "==> Construyendo imagen Backend con tag: $(SEMVER_TAG)"
+              docker build \
+                -t $(acrLoginServer)/backend:$(SEMVER_TAG) \
+                -t $(acrLoginServer)/backend:latest \
+                -f backend/Containerfile backend
+
+              echo "==> Pusheando imagen Backend a ACR..."
+              docker push $(acrLoginServer)/backend:$(SEMVER_TAG)
+              docker push $(acrLoginServer)/backend:latest
+            displayName: 'Build & Push Backend OCI'
+
+          # 5. Construcción y publicación de Frontend a ACR
+          - bash: |
+              echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
+              docker build \
+                -t $(acrLoginServer)/frontend:$(SEMVER_TAG) \
+                -t $(acrLoginServer)/frontend:latest \
+                -f frontend/Containerfile frontend
+
+              echo "==> Pusheando imagen Frontend a ACR..."
+              docker push $(acrLoginServer)/frontend:$(SEMVER_TAG)
+              docker push $(acrLoginServer)/frontend:latest
+            displayName: 'Build & Push Frontend OCI'
+
+  # ----------------------------------------------------------------------------
+  # STAGE 3: ENTREGA CONTINUA (CD) - DESPLIEGUE A VM LINUX EN AZURE
+  # ----------------------------------------------------------------------------
+  - stage: CD
+    displayName: '3. CD: Despliegue en VM Linux'
+    dependsOn:
+      - Versioning
+      - CI
+    variables:
+      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
+    jobs:
+      - deployment: DeployToVM
+        displayName: 'Desplegar en VM Azure'
+        pool:
+          vmImage: 'ubuntu-latest'
+        # Si usas Azure Pipelines Environment con agente en la VM:
+        # environment:
+        #   name: $(vmEnvironmentName)
+        #   resourceType: VirtualMachine
+        #   strategy:
+        #     runOnce:
+        #       deploy:
+        #         steps: ...
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - bash: |
+                    echo "========================================================"
+                    echo " Despliegue en marcha para versión: $(SEMVER_TAG)"
+                    echo " Servidor de registro: $(acrLoginServer)"
+                    echo "========================================================"
+                    echo "Para completar la conexión a la VM se puede utilizar:"
+                    echo "1) El agente registrado en Azure DevOps Environment ($(vmEnvironmentName))"
+                    echo "2) O la tarea SSH@0 apuntando a la IP pública de la VM"
+                  displayName: 'Verificar Parámetros de Despliegue'

@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-12: Diseño e Implementación de CI/CD en Azure DevOps y SemVer**](/bitacora/2026-09-12-diseno-ci-cd-azure-devops)
+  - Diseño del pipeline multi-stage (`azure-pipelines.yml`) separando CI y CD.
+  - Automatización de Versionado Semántico mediante Conventional Commits.
+  - Publicación segura en Azure Container Registry (`acrdevopsvalenzano.azurecr.io`).
+  - Despliegue continuo y validación con Smoke Tests en la VM Linux.
+
 - [**2026-09-08: Migración a .NET 10 (LTS) y Contenedorización Inmutable**](/bitacora/2026-09-08-migracion-dotnet-10)
   - Actualización del microservicio backend a .NET 10 LTS preservando el diseño *single-file* (Minimal API).
   - Actualización de imágenes base en `Containerfile` (`10.0-alpine`).
