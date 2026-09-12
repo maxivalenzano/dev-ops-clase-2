@@ -91,6 +91,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-09-12: Despliegue Continuo (CD)', link: '/bitacora/2026-09-12-despliegue-continuo-vm-azure' },
             { text: '2026-09-12: CI/CD en Azure DevOps', link: '/bitacora/2026-09-12-diseno-ci-cd-azure-devops' },
             { text: '2026-09-08: Migración a .NET 10', link: '/bitacora/2026-09-08-migracion-dotnet-10' },
             { text: '2026-09-07: Infraestructura en Azure', link: '/bitacora/2026-09-07-migracion-azure-vm-acr' },

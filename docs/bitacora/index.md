@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-12: Despliegue Continuo (CD) en VM Linux con Environments**](/bitacora/2026-09-12-despliegue-continuo-vm-azure)
+  - Registro de VM Linux en Azure DevOps Environments como agente Pull-based.
+  - Arquitectura segura sin exposición de puertos SSH ni claves en variables.
+  - Automatización del pull de imágenes OCI desde ACR y recreación de contenedores con Compose.
+  - Smoke testing y validación de salud de Nginx.
+
 - [**2026-09-12: Diseño e Implementación de CI/CD en Azure DevOps y SemVer**](/bitacora/2026-09-12-diseno-ci-cd-azure-devops)
   - Diseño del pipeline multi-stage (`azure-pipelines.yml`) separando CI y CD.
   - Automatización de Versionado Semántico mediante Conventional Commits.
