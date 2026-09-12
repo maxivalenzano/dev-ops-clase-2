@@ -177,14 +177,7 @@ stages:
         displayName: 'Desplegar en VM Azure'
         pool:
           vmImage: 'ubuntu-latest'
-        # Si usas Azure Pipelines Environment con agente en la VM:
-        # environment:
-        #   name: $(vmEnvironmentName)
-        #   resourceType: VirtualMachine
-        #   strategy:
-        #     runOnce:
-        #       deploy:
-        #         steps: ...
+        environment: $(vmEnvironmentName)
         strategy:
           runOnce:
             deploy:
