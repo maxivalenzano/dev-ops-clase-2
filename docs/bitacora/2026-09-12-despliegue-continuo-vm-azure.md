@@ -1,7 +1,7 @@
 # 🚀 2026-09-12: Despliegue Continuo (CD) en VM Linux con Azure DevOps Environments
 
 **Fecha**: 2026-09-12  
-**Hito**: Configuración de Despliegue Continuo (CD) automatizado hacia la Máquina Virtual Linux (`vm-dev-ops`) mediante **Azure Pipelines Environments**, despliegue atómico con Docker Compose y validación post-despliegue (Smoke Testing).
+**Hito**: Configuración y resolución de incidentes en el **Despliegue Continuo (CD)** automatizado hacia la Máquina Virtual Linux (`vm-dev-ops`) mediante **Azure Pipelines Environments**, despliegue atómico con Docker Compose y validación post-despliegue (Smoke Testing).
 
 ---
 
@@ -34,14 +34,16 @@
  |  +---------------------------------------------------+  |
  |  |   Máquina Virtual Azure (vm-dev-ops / Ubuntu)     |  |
  |  |                                                   |  |
- |  |   [Azure Pipelines Agent (Service)]               |  |
+ |  |   [Azure Pipelines Agent (systemd)]               |  |
+ |  |      - Servicio: vsts.agent...service             |  |
  |  |      - Comunicación saliente HTTPS (segura)       |  |
  |  |      - Recibe instrucciones del Stage 3           |  |
  |  |                                                   |  |
- |  |   1. Inyecta IMAGE_TAG=$(SEMVER_TAG) en .env      |  |
- |  |   2. Ejecuta: docker compose pull                 |  |
- |  |   3. Ejecuta: docker compose up -d                |  |
- |  |   4. Smoke Test: curl http://localhost/           |  |
+ |  |   1. Inyecta IMAGE_TAG=$(SEMVER_TAG) en variables |  |
+ |  |   2. Fija COMPOSE_PROJECT_NAME="devops-lab"       |  |
+ |  |   3. Ejecuta: docker compose pull                 |  |
+ |  |   4. Ejecuta: docker compose up -d                |  |
+ |  |   5. Smoke Test: curl http://localhost/           |  |
  |  +---------------------------------------------------+  |
  +---------------------------------------------------------+
 ```
@@ -56,13 +58,46 @@
 
 ## 🛠️ Acciones Realizadas
 
-1. [En curso] Generación del script de registro del agente de Azure DevOps para Linux.
-2. [En curso] Ejecución del script en `vm-dev-ops` e instalación como servicio del sistema (`systemd`).
-3. [En curso] Actualización de `azure-pipelines.yml` para ejecutar las tareas de despliegue sobre el recurso `VirtualMachine`.
+1. **Instalación del Agente de Azure Pipelines**:
+   - Descarga y extracción de la versión `5.279.0` del agente de Azure Pipelines para Linux x64 en `~/azagent`.
+   - Registro en la organización `maxivalenzano` bajo el proyecto `DevOps` y entorno `devops-vm-env`.
+   - Configuración como servicio nativo de Linux gestionado por `systemd`: `vsts.agent.maxivalenzano.devops-vm-env.vm-dev-ops.service`.
+2. **Actualización de `azure-pipelines.yml`**:
+   - Se configuró el Stage de CD para utilizar `environment: { name: $(vmEnvironmentName), resourceType: VirtualMachine }`, garantizando que las tareas se ejecuten directamente en el host productivo.
+   - Inyección de variables de entorno dinámicas: `IMAGE_TAG` y `COMPOSE_PROJECT_NAME`.
 
 ---
 
-## 📌 Próximos Pasos
-- Obtener el comando de registro desde el portal de Azure DevOps en el ambiente `devops-vm-env`.
-- Correr el script en la VM y verificar que figure en estado **Online**.
-- Disparar el pipeline completo y verificar el despliegue en vivo en `http://68.211.137.116`.
+## ⚠️ Dificultades Encontradas y Soluciones Técnicas (Troubleshooting)
+
+### 1. Bucle en la Registración Desatendida del Agente
+* **Síntoma**: Al ejecutar el script provisto por la interfaz web de Azure DevOps mediante SSH, el proceso se congeló en bucle leyendo líneas vacías de la terminal.
+* **Causa Raíz**: En sesiones SSH no interactivas (sin asignación de pseudo-terminal `pty`), el script de configuración del agente solicitaba la aceptación del acuerdo de licencia (TEE EULA). Al no haber entrada interactiva, la lectura de `stdin` entraba en un ciclo indefinido. Además, el parámetro oficial es sensible a mayúsculas (`--acceptTeeEula`).
+* **Solución**: Se cancelaron los procesos huérfanos con `kill -9` y se ejecutó la configuración especificando `--unattended` y `--acceptTeeEula`. El agente se registró en segundos y se activó con `sudo ./svc.sh install azureuser && sudo ./svc.sh start`.
+
+### 2. Colisión de Nombres y Proyectos en Docker Compose: `Conflict: container name "/lab-backend-1" is already in use`
+* **Síntoma**: Durante la primera ejecución real del CD, la descarga de imágenes (`pull`) completó exitosamente, pero al ejecutar `docker compose up -d` el paso falló con el error:  
+  `service:backend-1:1 Error response from daemon: Conflict. The container name "/lab-backend-1" is already in use by container "e5bd7733cc49..."`.
+* **Causa Raíz**: 
+  - **Divergencia de Proyecto Compose**: Docker Compose utiliza por defecto el nombre del directorio donde se ejecuta para agrupar los recursos. El agente de Azure DevOps clona el repositorio en `/home/azureuser/azagent/_work/1/s`, por lo que Compose asumió que el proyecto se llamaba `s` (creando la red `s_lab-network`).
+  - **Contenedores Huérfanos del Despliegue Manual**: En el host continuaban ejecutándose los contenedores del despliegue inicial realizado 4 días atrás desde la carpeta `~/dev-ops`. Al tener nombres estáticos asignados (`container_name: lab-backend-1`), el nuevo proyecto `s` colisionó con los contenedores existentes.
+* **Solución**:
+  1. Se detuvieron y eliminaron los contenedores manuales previos (`docker stop lab-nginx lab-frontend lab-backend-1 && docker rm ...`), dejando al pipeline de Azure DevOps como el único orquestador de la infraestructura.
+  2. Se fijó explícitamente `export COMPOSE_PROJECT_NAME="devops-lab"` en el script del pipeline para que el namespace de Docker Compose sea determinístico sin importar la ruta donde el agente clone el repositorio.
+  3. Se removió la directiva obsoleta `version: '3.8'` del archivo `compose.yaml`.
+
+---
+
+## 🧪 Pruebas y Validación End-to-End
+
+- La corrida subsiguiente calculó el tag SemVer correspondiente.
+- El agente en la VM descargó las imágenes recién construidas en ACR (`:2.1.1`).
+- Los contenedores se recrearon limpiamente bajo el proyecto `devops-lab`.
+- El Smoke Test (`curl -fsS http://localhost/`) validó que el Nginx Gateway responde exitosamente.
+
+---
+
+## 💡 Lecciones Aprendidas
+
+1. **La infraestructura manual debe ceder el control a la automatización**: Dejar contenedores corriendo manualmente genera colisiones de puertos y nombres cuando entra un orquestador de CD. El servidor debe tratarse como ganado (*cattle*), no como mascota (*pet*).
+2. **Determinismo en Docker Compose**: Nunca delegar el nombre del proyecto al nombre de la carpeta actual; definir `COMPOSE_PROJECT_NAME` garantiza reproducibilidad en cualquier entorno de ejecución o agente de CI/CD.
