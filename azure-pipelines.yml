@@ -175,9 +175,9 @@ stages:
     jobs:
       - deployment: DeployToVM
         displayName: 'Desplegar en VM Azure'
-        pool:
-          vmImage: 'ubuntu-latest'
-        environment: $(vmEnvironmentName)
+        environment:
+          name: $(vmEnvironmentName)
+          resourceType: VirtualMachine
         strategy:
           runOnce:
             deploy:
@@ -185,11 +185,23 @@ stages:
                 - checkout: self
 
                 - bash: |
+                    set -euo pipefail
                     echo "========================================================"
-                    echo " Despliegue en marcha para versión: $(SEMVER_TAG)"
+                    echo " Desplegando versión $(SEMVER_TAG) en $(Agent.Name)"
                     echo " Servidor de registro: $(acrLoginServer)"
                     echo "========================================================"
-                    echo "Para completar la conexión a la VM se puede utilizar:"
-                    echo "1) El agente registrado en Azure DevOps Environment ($(vmEnvironmentName))"
-                    echo "2) O la tarea SSH@0 apuntando a la IP pública de la VM"
-                  displayName: 'Verificar Parámetros de Despliegue'
+
+                    export IMAGE_TAG="$(SEMVER_TAG)"
+                    export ACR_LOGIN_SERVER="$(acrLoginServer)"
+
+                    echo "==> Descargando nuevas imágenes desde ACR..."
+                    docker compose pull
+
+                    echo "==> Levantando contenedores actualizados..."
+                    docker compose up -d --remove-orphans
+
+                    echo "==> Ejecutando Smoke Test contra Nginx..."
+                    sleep 4
+                    curl -fsS http://localhost/ > /dev/null
+                    echo "==> Despliegue completado y validado exitosamente (HTTP 200 OK)."
+                  displayName: 'Pull y Despliegue con Docker Compose'
