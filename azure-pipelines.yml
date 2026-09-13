@@ -232,8 +232,14 @@ stages:
                     echo "==> Levantando contenedores actualizados..."
                     docker compose up -d --remove-orphans
 
-                    echo "==> Ejecutando Smoke Test contra Nginx..."
-                    sleep 4
+                    echo "==> Refrescando Gateway Nginx para sincronizar DNS interno..."
+                    docker compose restart nginx
+
+                    echo "==> Esperando estabilización de servicios..."
+                    sleep 5
+
+                    echo "==> Ejecutando Smoke Test contra Nginx y Backend..."
                     curl -fsS http://localhost/ > /dev/null
+                    curl -fsS http://localhost/api/info > /dev/null
                     echo "==> Despliegue completado y validado exitosamente (HTTP 200 OK)."
                   displayName: 'Pull y Despliegue con Docker Compose'

@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Troubleshooting de CD: DNS en Nginx (502) y Versión Visual**](/bitacora/2026-09-13-troubleshooting-dns-nginx-cd)
+  - Diagnóstico de error 502 en Gateway Nginx y código de salida 22 en Smoke Test.
+  - Causa raíz: Caché DNS estática en Nginx al recrear contenedores en Docker network.
+  - Mitigación en pipeline con reinicio de gateway y re-resolución DNS.
+  - Inyección de versión SemVer `2.1.2` y visualización de badge en el Frontend React.
+
 - [**2026-09-12: Despliegue Continuo (CD) en VM Linux con Environments**](/bitacora/2026-09-12-despliegue-continuo-vm-azure)
   - Registro de VM Linux en Azure DevOps Environments como agente Pull-based.
   - Arquitectura segura sin exposición de puertos SSH ni claves en variables.
