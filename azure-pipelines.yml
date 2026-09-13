@@ -253,19 +253,20 @@ stages:
                     git config user.name "Azure DevOps Pipeline"
                     git config user.email "devops-pipeline@azure.com"
 
-                    # Crear tag si no existe
+                    # Crear tag local si no existe
                     if ! git rev-parse "v$(SEMVER_TAG)" >/dev/null 2>&1; then
                       git tag -a "v$(SEMVER_TAG)" -m "Release v$(SEMVER_TAG) desplegado en Producción"
                       echo "==> Tag local v$(SEMVER_TAG) creado."
                     fi
 
-                    # Publicar tag en GitHub si el token está configurado
-                    if [ -n "${GITHUB_PAT:-}" ]; then
+                    # Publicar tag en GitHub solo si se configuró un token real
+                    if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
                       git push "https://${GITHUB_PAT}@github.com/maxivalenzano/dev-ops-clase-2.git" "v$(SEMVER_TAG)"
                       echo "==> Tag v$(SEMVER_TAG) publicado exitosamente en GitHub."
                     else
-                      echo "==> [Info] Para que el pipeline suba el tag a GitHub automáticamente, agregá la variable secreta GITHUB_PAT en Azure DevOps."
+                      echo "==> [Aviso] Para que el pipeline publique el tag en GitHub, agregá la variable secreta GITHUB_PAT en la configuración del pipeline."
                     fi
                   displayName: 'Etiquetar Versión en Git'
+                  continueOnError: true
                   env:
                     GITHUB_PAT: $(GITHUB_PAT)
