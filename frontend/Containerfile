@@ -10,6 +10,8 @@ RUN npm install --no-audit --no-fund
 COPY . .
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_APP_VERSION="2.0.0"
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
 RUN npm run build
 
 # Stage 2: Production Nginx web server (~25MB total image size)

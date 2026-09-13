@@ -55,9 +55,17 @@ stages:
                 echo "Tag detectado en Git: $SEMVER_TAG"
               else
                 # 2. Buscar el último tag SemVer existente o arrancar en 2.0.0
-                LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "v2.0.0")
+                if git describe --tags --abbrev=0 --match "v[0-9]*" >/dev/null 2>&1; then
+                  LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*")
+                  COMMIT_RANGE="${LAST_TAG}..HEAD"
+                else
+                  LAST_TAG="v2.0.0"
+                  COMMIT_RANGE="HEAD"
+                fi
+
                 CLEAN_TAG="${LAST_TAG#v}"
                 echo "Último tag base: $CLEAN_TAG"
+                echo "Rango de commits analizados: $COMMIT_RANGE"
 
                 # Parsear MAJOR.MINOR.PATCH
                 IFS='.' read -r -a VERSION_PARTS <<< "$CLEAN_TAG"
@@ -65,18 +73,40 @@ stages:
                 MINOR="${VERSION_PARTS[1]:-0}"
                 PATCH="${VERSION_PARTS[2]:-0}"
 
-                # 3. Evaluar Conventional Commits
-                if echo "$COMMIT_MSG" | grep -Eq "^(feat!|fix!|BREAKING CHANGE:)"; then
-                  echo "Impacto detectado: MAJOR (Breaking change)"
+                # 3. Evaluar historial acumulado de Conventional Commits
+                COMMITS=$(git log $COMMIT_RANGE --pretty=%s 2>/dev/null || echo "")
+
+                HAS_MAJOR=false
+                HAS_MINOR=false
+                PATCH_COUNT=0
+
+                while IFS= read -r line; do
+                  [[ -z "$line" ]] && continue
+                  if echo "$line" | grep -Eq "^(feat!|fix!|BREAKING CHANGE:)"; then
+                    HAS_MAJOR=true
+                  elif echo "$line" | grep -Eq "^feat(\(.*\))?:"; then
+                    HAS_MINOR=true
+                  else
+                    PATCH_COUNT=$((PATCH_COUNT + 1))
+                  fi
+                done <<< "$COMMITS"
+
+                if [ "$HAS_MAJOR" = true ]; then
+                  echo "Impacto acumulado: MAJOR (Breaking change detectado)"
                   MAJOR=$((MAJOR + 1))
                   MINOR=0
                   PATCH=0
-                elif echo "$COMMIT_MSG" | grep -Eq "^feat(\(.*\))?:"; then
-                  echo "Impacto detectado: MINOR (Nueva feature retrocompatible)"
+                elif [ "$HAS_MINOR" = true ]; then
+                  echo "Impacto acumulado: MINOR (Features detectadas) + $PATCH_COUNT patches"
                   MINOR=$((MINOR + 1))
-                  PATCH=0
+                  PATCH=$PATCH_COUNT
                 else
-                  echo "Impacto detectado: PATCH (Bugfix o cambio menor)"
+                  echo "Impacto acumulado: PATCH ($PATCH_COUNT fixes/cambios menores)"
+                  PATCH=$((PATCH + PATCH_COUNT))
+                fi
+
+                # Si no hubo incremento diferencial, asegurar al menos 1
+                if [ "$MAJOR.${MINOR}.${PATCH}" = "$CLEAN_TAG" ]; then
                   PATCH=$((PATCH + 1))
                 fi
 
@@ -153,6 +183,7 @@ stages:
           - bash: |
               echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
               docker build \
+                --build-arg VITE_APP_VERSION="$(SEMVER_TAG)" \
                 -t $(acrLoginServer)/frontend:$(SEMVER_TAG) \
                 -t $(acrLoginServer)/frontend:latest \
                 -f frontend/Containerfile frontend

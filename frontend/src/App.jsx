@@ -152,6 +152,19 @@ export default function App() {
         <div>
           <h1>
             <span>🚀</span> Podman Multi-Tier Lab
+            <span style={{
+              marginLeft: '0.75rem',
+              fontSize: '0.75rem',
+              padding: '0.2rem 0.55rem',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              color: 'var(--accent-blue, #38bdf8)',
+              fontWeight: 600,
+              verticalAlign: 'middle'
+            }}>
+              v{import.meta.env.VITE_APP_VERSION || '2.0.0'}
+            </span>
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
             React 18 + .NET Minimal API + Nginx Reverse Proxy
