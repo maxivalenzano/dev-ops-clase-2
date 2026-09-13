@@ -338,6 +338,41 @@ EOF
                           "names": ["devops", "azure-devops", "docker-compose", "podman", "dotnet10", "react18", "nginx", "semver", "ci-cd", "microservices"]
                         }' || echo "==> [Aviso] No se pudieron actualizar los topics."
 
+                      echo "==> Registrando despliegue oficial en GitHub Deployments API..."
+                      COMMIT_SHA="$(Build.SourceVersion)"
+                      DEPLOY_RES=$(curl -s -X POST \
+                        -H "User-Agent: AzureDevOps-Pipeline" \
+                        -H "Authorization: Bearer ${GITHUB_PAT}" \
+                        -H "Accept: application/vnd.github+json" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments \
+                        -d "{
+                          \"ref\": \"${COMMIT_SHA}\",
+                          \"environment\": \"Production\",
+                          \"description\": \"Despliegue v${SEMVER_TAG} en Azure VM\",
+                          \"auto_merge\": false,
+                          \"required_contexts\": []
+                        }" || echo "{}")
+
+                      DEPLOY_ID=$(echo "$DEPLOY_RES" | jq -r '.id // empty')
+                      if [ -n "$DEPLOY_ID" ]; then
+                        echo "==> Deployment creado en GitHub con ID: $DEPLOY_ID. Reportando estado 'success'..."
+                        curl -s -X POST \
+                          -H "User-Agent: AzureDevOps-Pipeline" \
+                          -H "Authorization: Bearer ${GITHUB_PAT}" \
+                          -H "Accept: application/vnd.github+json" \
+                          -H "X-GitHub-Api-Version: 2022-11-28" \
+                          https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments/${DEPLOY_ID}/statuses \
+                          -d "{
+                            \"state\": \"success\",
+                            \"environment_url\": \"http://68.211.137.116\",
+                            \"description\": \"Despliegue v${SEMVER_TAG} verificado en vivo con Smoke Tests\"
+                          }" > /dev/null
+                        echo "==> GitHub Deployments actualizado exitosamente a 'success'."
+                      else
+                        echo "==> [Aviso] No se pudo crear el deployment en GitHub: $DEPLOY_RES"
+                      fi
+
                       echo "==> Sincronización con GitHub completada exitosamente."
                     else
                       echo "==> [Aviso] GITHUB_PAT no configurado en variables de Azure DevOps. Se omite actualización en GitHub."
