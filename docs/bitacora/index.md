@@ -6,6 +6,13 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Gobernanza en CD con Quality Gates, GitHub Deployments y Troubleshooting YAML**](/bitacora/2026-09-13-gobernanza-deployments-quality-gate)
+  - Paso de Continuous Deployment a Continuous Delivery con compuertas de calidad manuales (Approvals).
+  - Configuración de `devops-vm-env` y resolución de deadlocks con *"Allow approvers to approve their own runs"*.
+  - Integración con GitHub Deployments API para auditoría y visualización del entorno `production`.
+  - Diagnóstico y solución del error sintáctico de YAML (*Informational Run*) migrando a `jq -n`.
+  - Curaduría minimalista del perfil del repositorio en GitHub.
+
 - [**2026-09-13: Automatización de Releases, GHCR Packages y Portada en GitHub**](/bitacora/2026-09-13-automatizacion-releases-packages-github)
   - Sincronización desatendida entre Azure DevOps y GitHub con `GITHUB_PAT`.
   - Publicación dual OCI (ACR + GitHub Container Registry) para visibilidad en Packages.
