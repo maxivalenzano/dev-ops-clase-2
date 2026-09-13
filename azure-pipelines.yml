@@ -166,10 +166,12 @@ stages:
               command: 'login'
               containerRegistry: $(acrServiceConnection)
 
-          # 4. Construcción y publicación de Backend a ACR
+          # 4. Construcción y publicación de Backend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Backend con tag: $(SEMVER_TAG)"
               docker build \
+                --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
+                --label "org.opencontainers.image.description=Backend .NET 10 Microservice" \
                 -t $(acrLoginServer)/backend:$(SEMVER_TAG) \
                 -t $(acrLoginServer)/backend:latest \
                 -f backend/Containerfile backend
@@ -177,13 +179,29 @@ stages:
               echo "==> Pusheando imagen Backend a ACR..."
               docker push $(acrLoginServer)/backend:$(SEMVER_TAG)
               docker push $(acrLoginServer)/backend:latest
-            displayName: 'Build & Push Backend OCI'
 
-          # 5. Construcción y publicación de Frontend a ACR
+              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR)
+              if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
+                echo "==> Autenticando y publicando imagen Backend en GitHub Packages (GHCR)..."
+                echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin
+                docker tag $(acrLoginServer)/backend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
+                docker tag $(acrLoginServer)/backend:latest ghcr.io/maxivalenzano/dev-ops-backend:latest
+                docker push ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
+                docker push ghcr.io/maxivalenzano/dev-ops-backend:latest
+                echo "==> Backend publicado en GHCR exitosamente."
+              fi
+            displayName: 'Build & Push Backend OCI (ACR + GHCR)'
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GITHUB_PAT)
+
+          # 5. Construcción y publicación de Frontend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
               docker build \
                 --build-arg VITE_APP_VERSION="$(SEMVER_TAG)" \
+                --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
+                --label "org.opencontainers.image.description=Frontend React 18 / Vite SPA" \
                 -t $(acrLoginServer)/frontend:$(SEMVER_TAG) \
                 -t $(acrLoginServer)/frontend:latest \
                 -f frontend/Containerfile frontend
@@ -191,7 +209,21 @@ stages:
               echo "==> Pusheando imagen Frontend a ACR..."
               docker push $(acrLoginServer)/frontend:$(SEMVER_TAG)
               docker push $(acrLoginServer)/frontend:latest
-            displayName: 'Build & Push Frontend OCI'
+
+              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR)
+              if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
+                echo "==> Autenticando y publicando imagen Frontend en GitHub Packages (GHCR)..."
+                echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin
+                docker tag $(acrLoginServer)/frontend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
+                docker tag $(acrLoginServer)/frontend:latest ghcr.io/maxivalenzano/dev-ops-frontend:latest
+                docker push ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
+                docker push ghcr.io/maxivalenzano/dev-ops-frontend:latest
+                echo "==> Frontend publicado en GHCR exitosamente."
+              fi
+            displayName: 'Build & Push Frontend OCI (ACR + GHCR)'
+            continueOnError: true
+            env:
+              GITHUB_PAT: $(GITHUB_PAT)
 
   # ----------------------------------------------------------------------------
   # STAGE 3: ENTREGA CONTINUA (CD) - DESPLIEGUE A VM LINUX EN AZURE
@@ -247,26 +279,70 @@ stages:
                 - bash: |
                     set -euo pipefail
                     echo "========================================================"
-                    echo " Sellando Release v$(SEMVER_TAG) en el repositorio Git"
+                    echo " Sincronizando Release, Tags y Metadata en GitHub"
                     echo "========================================================"
 
                     git config user.name "Azure DevOps Pipeline"
                     git config user.email "devops-pipeline@azure.com"
 
-                    # Crear tag local si no existe
+                    # 1. Crear tag local si no existe
                     if ! git rev-parse "v$(SEMVER_TAG)" >/dev/null 2>&1; then
                       git tag -a "v$(SEMVER_TAG)" -m "Release v$(SEMVER_TAG) desplegado en Producción"
                       echo "==> Tag local v$(SEMVER_TAG) creado."
                     fi
 
-                    # Publicar tag en GitHub solo si se configuró un token real
+                    # 2. Publicar tag, Release y Metadata si GITHUB_PAT está configurado
                     if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
-                      git push "https://${GITHUB_PAT}@github.com/maxivalenzano/dev-ops-clase-2.git" "v$(SEMVER_TAG)"
-                      echo "==> Tag v$(SEMVER_TAG) publicado exitosamente en GitHub."
+                      echo "==> Publicando tag v$(SEMVER_TAG) en GitHub..."
+                      git push "https://${GITHUB_PAT}@github.com/maxivalenzano/dev-ops-clase-2.git" "v$(SEMVER_TAG)" || echo "==> Tag ya existía en GitHub."
+
+                      echo "==> Creando/actualizando GitHub Release oficial para v$(SEMVER_TAG)..."
+                      RELEASE_JSON=$(cat <<EOF
+{
+  "tag_name": "v${SEMVER_TAG}",
+  "name": "Release v${SEMVER_TAG}",
+  "body": "Automated deployment v${SEMVER_TAG} to Azure VM (http://68.211.137.116) via Azure DevOps Multi-Stage Pipeline.",
+  "draft": false,
+  "prerelease": false,
+  "generate_release_notes": true
+}
+EOF
+)
+                      curl -fsS -X POST \
+                        -H "User-Agent: AzureDevOps-Pipeline" \
+                        -H "Authorization: Bearer ${GITHUB_PAT}" \
+                        -H "Accept: application/vnd.github+json" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/releases \
+                        -d "$RELEASE_JSON" || echo "==> [Aviso] El Release ya existía o API no lo requirió."
+
+                      echo "==> Actualizando Metadata de portada en GitHub (About, Website y Topics)..."
+                      curl -fsS -X PATCH \
+                        -H "User-Agent: AzureDevOps-Pipeline" \
+                        -H "Authorization: Bearer ${GITHUB_PAT}" \
+                        -H "Accept: application/vnd.github+json" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2 \
+                        -d '{
+                          "description": "🚀 DevOps Lab: Microservices (.NET 10 & React 18), Nginx Gateway, automated CI/CD in Azure DevOps with SemVer & Docker Compose.",
+                          "homepage": "http://68.211.137.116"
+                        }' || echo "==> [Aviso] No se pudo actualizar descripción/homepage (revisar permisos del token)."
+
+                      curl -fsS -X PUT \
+                        -H "User-Agent: AzureDevOps-Pipeline" \
+                        -H "Authorization: Bearer ${GITHUB_PAT}" \
+                        -H "Accept: application/vnd.github+json" \
+                        -H "X-GitHub-Api-Version: 2022-11-28" \
+                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/topics \
+                        -d '{
+                          "names": ["devops", "azure-devops", "docker-compose", "podman", "dotnet10", "react18", "nginx", "semver", "ci-cd", "microservices"]
+                        }' || echo "==> [Aviso] No se pudieron actualizar los topics."
+
+                      echo "==> Sincronización con GitHub completada exitosamente."
                     else
-                      echo "==> [Aviso] Para que el pipeline publique el tag en GitHub, agregá la variable secreta GITHUB_PAT en la configuración del pipeline."
+                      echo "==> [Aviso] GITHUB_PAT no configurado en variables de Azure DevOps. Se omite actualización en GitHub."
                     fi
-                  displayName: 'Etiquetar Versión en Git'
+                  displayName: 'Sincronizar Release, Tags y Metadata en GitHub'
                   continueOnError: true
                   env:
                     GITHUB_PAT: $(GITHUB_PAT)

@@ -1,6 +1,17 @@
 # 🚀 Podman Container & Microservices Lab
 
-A lightweight, hands-on lab designed to master **Podman**, container orchestration, **Nginx** reverse proxying, load balancing, timeouts, resource limits (CPU/OOM), and native **Podman Pods** (`localhost` network sharing).
+[![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://68.211.137.116)
+[![GitHub Release](https://img.shields.io/github/v/release/maxivalenzano/dev-ops-clase-2?color=blue&logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/releases)
+[![GitHub Packages](https://img.shields.io/badge/GitHub-Packages%20(GHCR)-black?logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend)
+[![Azure Pipelines](https://img.shields.io/badge/Azure%20Pipelines-CI%2FCD%20Multi--Stage-0078D7?logo=azure-devops&logoColor=white)](https://dev.azure.com/)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](backend/)
+[![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/)
+[![Nginx Gateway](https://img.shields.io/badge/Nginx-Reverse%20Proxy-009639?logo=nginx&logoColor=white)](nginx/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](compose.yaml)
+
+A lightweight, hands-on lab designed to master **Podman**, container orchestration, **Nginx** reverse proxying, load balancing, timeouts, resource limits (CPU/OOM), and native **Podman Pods** (`localhost` network sharing). Deployed automatically to Azure VM via Azure DevOps Multi-Stage CI/CD.
+
+👉 **Live Application**: [http://68.211.137.116](http://68.211.137.116)
 
 ---
 

@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Automatización de Releases, GHCR Packages y Portada en GitHub**](/bitacora/2026-09-13-automatizacion-releases-packages-github)
+  - Sincronización desatendida entre Azure DevOps y GitHub con `GITHUB_PAT`.
+  - Publicación dual OCI (ACR + GitHub Container Registry) para visibilidad en Packages.
+  - Creación automática de GitHub Releases oficiales con changelog mediante la API REST.
+  - Actualización automática de descripción del repo, enlace de la app en vivo y topics.
+
 - [**2026-09-13: Troubleshooting de CD: DNS en Nginx (502) y Versión Visual**](/bitacora/2026-09-13-troubleshooting-dns-nginx-cd)
   - Diagnóstico de error 502 en Gateway Nginx y código de salida 22 en Smoke Test.
   - Causa raíz: Caché DNS estática en Nginx al recrear contenedores en Docker network.
