@@ -193,6 +193,7 @@ stages:
 
                     export IMAGE_TAG="$(SEMVER_TAG)"
                     export ACR_LOGIN_SERVER="$(acrLoginServer)"
+                    export COMPOSE_PROJECT_NAME="devops-lab"
 
                     echo "==> Descargando nuevas imágenes desde ACR..."
                     docker compose pull
