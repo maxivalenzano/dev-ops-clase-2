@@ -373,7 +373,7 @@ stages:
 ## 🚀 Release v$(SEMVER_TAG)
 
 ### 🌐 Despliegue en Vivo
-- **URL**: [http://68.211.137.116](http://68.211.137.116)
+- **URL**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com) (o IP directa http://68.211.137.116)
 - **Infraestructura**: Azure VM Ubuntu (Docker Compose + Nginx Gateway + 3 nodos Backend .NET 10 + Frontend React 18 + Redis)
 - **Seguridad & Calidad**: SonarQube Cloud Quality Gate & Trivy Security Scanner
 
@@ -407,7 +407,7 @@ EOF
                         https://api.github.com/repos/maxivalenzano/dev-ops-clase-2 \
                         -d '{
                           "description": "🚀 DevOps Lab: Microservices (.NET 10 & React 18), Nginx Gateway, automated CI/CD in Azure DevOps with SemVer & Docker Compose.",
-                          "homepage": "http://68.211.137.116"
+                          "homepage": "http://devops-maxivalenzano.com"
                         }' || echo "==> [Aviso] No se pudo actualizar descripción/homepage (revisar permisos del token)."
 
                       curl -fsS -X PUT \
@@ -447,7 +447,7 @@ EOF
                           https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments/${DEPLOY_ID}/statuses \
                           -d "{
                             \"state\": \"success\",
-                            \"environment_url\": \"http://68.211.137.116\",
+                            \"environment_url\": \"http://devops-maxivalenzano.com\",
                             \"description\": \"Despliegue v${SEMVER_TAG} verificado en vivo con Smoke Tests\"
                           }" > /dev/null
                         echo "==> GitHub Deployments actualizado exitosamente a 'success'."

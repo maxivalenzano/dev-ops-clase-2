@@ -102,12 +102,12 @@ En `azure-pipelines.yml`, una vez que los contenedores están corriendo y pasaro
      "https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments/${DEPLOYMENT_ID}/statuses" \
      -d "$(jq -n \
        --arg state "success" \
-       --arg target_url "http://68.211.137.116" \
+       --arg target_url "http://devops-maxivalenzano.com" \
        --arg desc "Desplegado exitosamente en VM Azure vía Azure Pipelines" \
        '{state: $state, target_url: $target_url, description: $desc, environment_url: $target_url}')"
    ```
 
-Esto habilita de inmediato en GitHub la tarjeta de **Environments -> production (Active)** en el lateral derecho del repositorio, con acceso directo a `http://68.211.137.116`.
+Esto habilita de inmediato en GitHub la tarjeta de **Environments -> production (Active)** en el lateral derecho del repositorio, con acceso directo a `http://devops-maxivalenzano.com`.
 
 ---
 

@@ -92,6 +92,7 @@ export default defineConfig({
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
             { text: '2026-09-14: TP 1 - Etapa 5: SAST, SonarCloud & Badges', link: '/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud' },
+            { text: '2026-09-14: Configuración Dominio & DNS (IONOS)', link: '/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx' },
             { text: '2026-09-14: Gobernanza en Azure DevOps & Work Items', link: '/bitacora/2026-09-14-configuracion-azure-devops-gobernanza-workitems' },
             { text: '2026-09-14: Etapa 3 - Cluster 3 Nodos & Nginx HA', link: '/bitacora/2026-09-14-etapa-3-nginx-cluster-3-nodos' },
             { text: '2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias .NET 10', link: '/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit' },

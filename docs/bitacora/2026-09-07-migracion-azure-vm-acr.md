@@ -21,7 +21,7 @@
 | Recurso | Nombre | Tipo / SKU | Región | IP / Endpoint | Notas |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Resource Group** | `rg-devops-lab` | Contenedor de Recursos | Chile Central | - | Agrupa toda la infraestructura del lab. |
-| **Máquina Virtual** | `vm-dev-ops` | `Standard_B2als_v2`<br>(2 vCPU AMD, 4 GB RAM) | Chile Central | **Public IP**: `68.211.137.116`<br>**Private IP**: `172.16.0.4` | SO: Ubuntu 24.04 LTS.<br>Costo: ~$0.052/hr (cubierto por Students). |
+| **Máquina Virtual** | `vm-dev-ops` | `Standard_B2als_v2`<br>(2 vCPU AMD, 4 GB RAM) | Chile Central | **Dominio**: `devops-maxivalenzano.com`<br>**Public IP**: `68.211.137.116`<br>**Private IP**: `172.16.0.4` | SO: Ubuntu 24.04 LTS.<br>Costo: ~$0.052/hr (cubierto por Students). |
 | **Seguridad (NSG)** | `vm-dev-ops-nsg` | Network Security Group | Chile Central | - | Puertos abiertos: **`22` (SSH)** y **`80` (HTTP)**. |
 | **Container Registry**| `acrdevopsvalenzano`| Azure Container Registry (Basic)| Chile Central | `acrdevopsvalenzano.azurecr.io` | **User**: `acrdevopsvalenzano`<br>**Pass 1**: `ArwCgwnAjjdVGUBVwUx2WhoUzXae5eoD0IfIBzPoXdsxPIHuoMxMJQQJ99CIAC1KCM3Eqg7NAAACAZCRzhQ7`<br>**Pass 2**: `Fsy0LznEv9EK2hwWtZB0QRZtjsnLkNM71IPfGR1PTK7PJxkiwbnfJQQJ99CIAC1KCM3Eqg7NAAACAZCRsAgX` |
 | **Clave SSH** | `vm-dev-ops_key.pem`| RSA 2048 | Local (Windows) | `C:\Users\m.valenzano\Downloads\` | Llave privada de acceso para `azureuser`. |
@@ -134,7 +134,7 @@ Content-Type: application/json; charset=utf-8
 
 {"instance":"backend-dotnet-1","hostname":"cbfe09c45597","pid":1,"port":3000,"uptimeSeconds":254,"isHealthy":true}
 ```
-* Navegador: Carga completa de la interfaz en `http://68.211.137.116/`.
+* Navegador: Carga completa de la interfaz en `http://devops-maxivalenzano.com/` (y `http://68.211.137.116/`).
 * Ruteo: Nginx atiende en puerto 80, sirve estáticos del frontend en `/` y delega las peticiones de datos a `backend-dotnet-1` en `/api/`.
 
 ---

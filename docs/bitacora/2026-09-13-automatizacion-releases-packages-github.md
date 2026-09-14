@@ -3,7 +3,7 @@
 **Fecha:** 13 de Septiembre de 2026  
 **Autor:** Maxi Valenzano  
 **Materia / Proyecto:** DevOps Lab - Clase 2  
-**Entorno:** Azure DevOps + GitHub (`maxivalenzano/dev-ops-clase-2`) + VM Azure (`68.211.137.116`)
+**Entorno:** Azure DevOps + GitHub (`maxivalenzano/dev-ops-clase-2`) + VM Azure (`devops-maxivalenzano.com` / `68.211.137.116`)
 
 ---
 
@@ -12,7 +12,7 @@
 Lograr una sincronización 100% desatendida entre el pipeline de **Azure DevOps** y la presentación visual del repositorio en **GitHub**. Cada push en la rama `devel` (y `main`) debe:
 1. Publicar contenedores OCI vinculados en **GitHub Packages (GHCR)** (`backend` y `frontend`).
 2. Generar el **Tag SemVer** y sellar el **GitHub Release oficial** con changelog automático.
-3. Actualizar la sección **About**, el enlace en vivo del proyecto (`http://68.211.137.116`) y los **Topics** técnicos.
+3. Actualizar la sección **About**, el enlace en vivo del proyecto (`http://devops-maxivalenzano.com`) y los **Topics** técnicos.
 4. Desplegar de forma continua en la máquina virtual Linux en Azure.
 
 ---
@@ -43,7 +43,7 @@ En la etapa `CD`, luego de validar los *Smoke Tests* locales en la VM, el pipeli
 ### 3. Sincronización de Metadata del Repositorio
 Se parametrizaron llamadas a la API de GitHub para actualizar:
 - **Description**: Resumen de microservicios y arquitectura.
-- **Homepage**: `http://68.211.137.116` (enlace directo a la app desplegada).
+- **Homepage**: `http://devops-maxivalenzano.com` (enlace directo a la app desplegada).
 - **Topics**: `devops`, `azure-devops`, `docker-compose`, `podman`, `dotnet10`, `react18`, `nginx`, `semver`, `ci-cd`, `microservices`.
 
 ### 4. Enriquecimiento del README
