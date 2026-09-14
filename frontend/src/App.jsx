@@ -16,6 +16,8 @@ export default function App() {
   const [instanceCounts, setInstanceCounts] = useState({});
   const [stats, setStats] = useState({ total: 0, success: 0, errors: 0, avgLatency: 0 });
 
+  // feat!: transicion de arquitectura a v3.0.0
+
   const addLog = (entry) => {
     setLogs((prev) => [
       { id: Date.now() + Math.random(), timestamp: new Date().toLocaleTimeString(), ...entry },
