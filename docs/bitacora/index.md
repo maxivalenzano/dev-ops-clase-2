@@ -6,6 +6,13 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: TP 1 - Etapa 5: CI con Análisis Estático de Seguridad (SAST), SonarQube Cloud y Badges**](/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud)
+  - Integración de SonarQube Cloud SAST para escaneo estático de vulnerabilidades, security hotspots y code smells en .NET 10.
+  - Evaluación y publicación automatizada del Quality Gate oficial en Azure Pipelines con compuerta de paso de calidad.
+  - Generación dual de reportes de cobertura (Coverlet OpenCover + Cobertura) para dashboards de SonarCloud y Azure DevOps.
+  - Auditoría complementaria de dependencias y Containerfiles mediante Trivy Security Scanner.
+  - Badges dinámicos oficiales de Azure Pipelines y SonarCloud incorporados en `README.md`.
+
 - [**2026-09-14: Gobernanza Ágil en Azure DevOps, Estructuración de Work Items y Troubleshooting de Plataforma**](/bitacora/2026-09-14-configuracion-azure-devops-gobernanza-workitems)
   - Migración de Process Template de `Basic` a `Agile` en la organización `maxivalenzano/DevOps`.
   - Estructuración y carga de 107 Work Items jerárquicos (87 históricos cerrados y 20 pendientes en Sprints 1 y 2).
@@ -18,7 +25,6 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
   - Configuración del upstream `backend_cluster` en Nginx con balanceo Round-Robin y detección de fallos.
   - Failover transparente sin caída (Zero-Downtime) con `proxy_next_upstream` y 3 reintentos (`proxy_next_upstream_tries 3`).
   - Persistencia compartida en Redis con visualización de firmas de nodo (`createdByNode` y `servedByNode`) en la UI.
-
 - [**2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias Backend (.NET 10 con xUnit, Moq y CI Gatekeeper)**](/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit)
   - Creación del proyecto `tests/Backend.Tests` en .NET 10 con xUnit, Moq y Microsoft.AspNetCore.Mvc.Testing.
   - Separación limpia en modelos (`TaskItem`) y capa de servicios (`ITaskService`, `TaskService`) con fallback resiliente.
