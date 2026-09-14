@@ -92,6 +92,7 @@ export default defineConfig({
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
             { text: '2026-09-13: Etapa 2 - Frontend Tablero Distribuido', link: '/bitacora/2026-09-13-etapa-2-frontend-tablero-distribuido' },
+            { text: '2026-09-13: TP 1 - Etapa 1: Redis y Firma de Nodos', link: '/bitacora/2026-09-13-tp1-etapa-1-redis-node-signature' },
             { text: '2026-09-13: Gobernanza y Quality Gates en CD', link: '/bitacora/2026-09-13-gobernanza-deployments-quality-gate' },
             { text: '2026-09-13: Releases & Packages en GitHub', link: '/bitacora/2026-09-13-automatizacion-releases-packages-github' },
             { text: '2026-09-13: Troubleshooting DNS & 502', link: '/bitacora/2026-09-13-troubleshooting-dns-nginx-cd' },
