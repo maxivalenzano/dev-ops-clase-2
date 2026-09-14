@@ -41,15 +41,40 @@ export function getNodeStyle(nodeName) {
   };
 }
 
-export default function TaskBoard({ onLogEvent }) {
+export default function TaskBoard({ onLogEvent, frontendInfo, onRefreshFrontend }) {
   const [tasks, setTasks] = useState([]);
   const [servedByNode, setServedByNode] = useState(null);
+  const [currentFrontendNode, setCurrentFrontendNode] = useState(frontendInfo?.instance || null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [errorMessage, setErrorMessage] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
+
+  useEffect(() => {
+    if (frontendInfo?.instance) {
+      setCurrentFrontendNode(frontendInfo.instance);
+    }
+  }, [frontendInfo]);
+
+  const fetchFrontendInfo = async () => {
+    if (onRefreshFrontend) {
+      const data = await onRefreshFrontend();
+      if (data?.instance) setCurrentFrontendNode(data.instance);
+      return data;
+    }
+    try {
+      const res = await fetch('/frontend-info');
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentFrontendNode(data.instance);
+        return data;
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchTasks = async () => {
     setIsLoading(true);
@@ -96,8 +121,15 @@ export default function TaskBoard({ onLogEvent }) {
     }
   };
 
+  const handleRefreshAll = async () => {
+    await Promise.all([fetchTasks(), fetchFrontendInfo()]);
+  };
+
   useEffect(() => {
     fetchTasks();
+    if (!frontendInfo?.instance) {
+      fetchFrontendInfo();
+    }
   }, []);
 
   const handleCreateTask = async (e) => {
@@ -224,6 +256,7 @@ export default function TaskBoard({ onLogEvent }) {
   const completedCount = tasks.filter((t) => t.isCompleted).length;
   const pendingCount = tasks.length - completedCount;
   const servedStyle = getNodeStyle(servedByNode);
+  const frontendStyle = getNodeStyle(currentFrontendNode);
 
   return (
     <div className="taskboard-container">
@@ -235,20 +268,30 @@ export default function TaskBoard({ onLogEvent }) {
               <span>📋</span> Tablero Distribuido sobre Redis
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-              Persistencia centralizada en Redis con balanceo de carga y estampado de firmas por nodo.
+              Persistencia centralizada en Redis con balanceo de carga y estampado de firmas por nodo en Frontend y Backend.
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {/* Frontend Tier Badge */}
+            <div className="read-signature-badge" style={{ backgroundColor: frontendStyle.bg, borderColor: frontendStyle.border }}>
+              <span className="badge-dot" style={{ backgroundColor: frontendStyle.text }} />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Frontend SPA:</span>
+              <strong className="mono" style={{ color: frontendStyle.text, fontSize: '0.85rem' }}>
+                {currentFrontendNode || 'Cargando...'}
+              </strong>
+            </div>
+
+            {/* Backend Tier Badge */}
             <div className="read-signature-badge" style={{ backgroundColor: servedStyle.bg, borderColor: servedStyle.border }}>
               <span className="badge-dot" style={{ backgroundColor: servedStyle.text }} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Última lectura atendida por:</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Backend API:</span>
               <strong className="mono" style={{ color: servedStyle.text, fontSize: '0.85rem' }}>
                 {servedByNode || 'Esperando lectura...'}
               </strong>
             </div>
 
-            <button onClick={fetchTasks} disabled={isLoading} style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
+            <button onClick={handleRefreshAll} disabled={isLoading} style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
               {isLoading ? '⏳ Actualizando...' : '🔄 Recargar'}
             </button>
           </div>
