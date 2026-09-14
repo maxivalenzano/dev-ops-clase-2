@@ -1,4 +1,4 @@
-  # ==============================================================================
+# ==============================================================================
 # Pipeline CI/CD Multi-Stage - DevOps Lab
 # ==============================================================================
 # Flujo desacoplado en 4 Stages:
@@ -396,27 +396,19 @@ stages:
                       echo "==> Extrayendo commits para Changelog en rango: ${LOG_RANGE}"
                       COMMITS_CHANGELOG=$(git log ${LOG_RANGE} --pretty=format:"* %s ([%h](https://github.com/maxivalenzano/dev-ops-clase-2/commit/%H))" 2>/dev/null || echo "* Despliegue de versión v$(SEMVER_TAG)")
 
-                      RELEASE_BODY=$(cat <<EOF
-## 🚀 Release v$(SEMVER_TAG)
-
-### 🌐 Despliegue en Vivo
-- **URL**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com) (o IP directa http://68.211.137.116)
-- **Infraestructura**: Azure VM Ubuntu (Docker Compose + Nginx Gateway + 3 nodos Backend .NET 10 + Frontend React 18 + Redis)
-- **Seguridad & Calidad**: SonarQube Cloud Quality Gate & Trivy Security Scanner
-
-### 📋 Changelog de la versión
-${COMMITS_CHANGELOG}
-
----
-*Despliegue y Release automatizado mediante Azure DevOps Multi-Stage Pipeline.*
-EOF
-)
-
                       RELEASE_JSON=$(jq -n \
                         --arg tag "v${SEMVER_TAG}" \
                         --arg name "Release v${SEMVER_TAG}" \
-                        --arg body "$RELEASE_BODY" \
-                        '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false, generate_release_notes: true}')
+                        --arg url "http://devops-maxivalenzano.com" \
+                        --arg changelog "$COMMITS_CHANGELOG" \
+                        '{
+                          tag_name: $tag,
+                          name: $name,
+                          body: ("## 🚀 Release " + $tag + "\n\n### 🌐 Despliegue en Vivo\n- **URL**: " + $url + " (o IP directa http://68.211.137.116)\n- **Infraestructura**: Azure VM Ubuntu (Docker Compose + Nginx Gateway + 3 nodos Backend .NET 10 + Frontend React 18 + Redis)\n- **Seguridad & Calidad**: SonarQube Cloud Quality Gate & Trivy Security Scanner\n\n### 📋 Changelog de la versión\n" + $changelog + "\n\n---\n*Despliegue y Release automatizado mediante Azure DevOps Multi-Stage Pipeline.*"),
+                          draft: false,
+                          prerelease: false,
+                          generate_release_notes: true
+                        }')
                       curl -fsS -X POST \
                         -H "User-Agent: AzureDevOps-Pipeline" \
                         -H "Authorization: Bearer ${GITHUB_PAT}" \
