@@ -154,7 +154,10 @@ stages:
           # 2. Ejecución de Pruebas Unitarias (.NET 10)
           - bash: |
               echo "==> Ejecutando Pruebas Unitarias en .NET 10..."
-              dotnet test tests/Backend.Tests/Backend.Tests.csproj --configuration Release --logger "trx;LogFileName=test_results.trx" /p:CollectCoverage=true
+              dotnet test tests/Backend.Tests/Backend.Tests.csproj \
+                --configuration Release \
+                --logger "trx;LogFileName=test_results.trx" \
+                --collect:"XPlat Code Coverage"
             displayName: 'Ejecutar Tests Unitarios (.NET 10)'
 
           - task: PublishTestResults@2
@@ -163,6 +166,12 @@ stages:
               testResultsFormat: 'VSTest'
               testResultsFiles: '**/test_results.trx'
               failTaskOnFailedTests: true
+            condition: succeededOrFailed()
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publicar Cobertura de Código'
+            inputs:
+              summaryFileLocation: '**/coverage.cobertura.xml'
             condition: succeededOrFailed()
 
           # 3. Validación de compilación de Frontend

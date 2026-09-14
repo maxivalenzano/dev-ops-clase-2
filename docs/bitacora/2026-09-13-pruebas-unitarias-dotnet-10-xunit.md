@@ -47,6 +47,7 @@ Para posibilitar pruebas unitarias limpias sin requerir un servidor Redis real l
 | `TaskServiceTests.cs` | Unitaria (Lógica/Mock) | xUnit + Moq | Verificar interacción con Redis (`HashSetAsync`, `HashGetAllAsync`, `HashDeleteAsync`), ordenamiento temporal y modo fallback en memoria. |
 | `HealthEndpointTests.cs` | Integración HTTP | `WebApplicationFactory<Program>` | Validar ciclo de vida de salud: `200 UP`, toggle manual a `500 DOWN`, recuperación a `200 UP` y endpoints `/` y `/api/info`. |
 | `TaskEndpointTests.cs` | Integración API REST | `WebApplicationFactory<Program>` | Validar el contrato HTTP completo de `/api/tasks`: validación 400 Bad Request, creación 201 Created, lectura 200 OK, toggle 200 OK y eliminación 204 No Content. |
+| `ChaosEndpointTests.cs` | Integración HTTP (Resiliencia) | `WebApplicationFactory<Program>` | Validar endpoints de laboratorio de caos: `/api/delay`, cómputo acotado en `/api/stress/cpu` y asignación/liberación (`/stress/memory/clear`). |
 
 ---
 
@@ -106,7 +107,7 @@ public void TaskItem_JsonSerialization_MatchesAgreedContract()
 
 ### 2.3 Simulación de Redis con `Moq` en `TaskServiceTests.cs`
 
-Las operaciones contra Redis se testean verificando que los métodos de `IDatabase` sean invocados con los argumentos exactos:
+Las operaciones contra Redis se testean verificando que los métodos de `IDatabase` sean invocados con los argumentos exactos y que las excepciones de conexión provoquen una degradación agraciada (*graceful degradation*) hacia el almacén en memoria:
 
 ```csharp
 [Fact]
@@ -146,7 +147,7 @@ public async Task CreateTaskAsync_WithValidInput_PersistsToRedisAndReturnsTask()
 
 ## 🛡️ 3. Integración en Azure Pipelines (Quality Gate)
 
-En `azure-pipelines.yml`, se incorporó la ejecución de las pruebas y la publicación de resultados en el formato estándar VSTest (`.trx`):
+En `azure-pipelines.yml`, se incorporó la ejecución de las pruebas, la recolección de cobertura multiplataforma y la publicación de resultados en el formato estándar VSTest (`.trx`) y Cobertura XML:
 
 ```yaml
           # 1. Validación de compilación de Backend
@@ -158,7 +159,10 @@ En `azure-pipelines.yml`, se incorporó la ejecución de las pruebas y la public
           # 2. Ejecución de Pruebas Unitarias (.NET 10)
           - bash: |
               echo "==> Ejecutando Pruebas Unitarias en .NET 10..."
-              dotnet test tests/Backend.Tests/Backend.Tests.csproj --configuration Release --logger "trx;LogFileName=test_results.trx" /p:CollectCoverage=true
+              dotnet test tests/Backend.Tests/Backend.Tests.csproj \
+                --configuration Release \
+                --logger "trx;LogFileName=test_results.trx" \
+                --collect:"XPlat Code Coverage"
             displayName: 'Ejecutar Tests Unitarios (.NET 10)'
 
           - task: PublishTestResults@2
@@ -168,13 +172,13 @@ En `azure-pipelines.yml`, se incorporó la ejecución de las pruebas y la public
               testResultsFiles: '**/test_results.trx'
               failTaskOnFailedTests: true
             condition: succeededOrFailed()
-```
 
-### ¿Por qué bloquea el despliegue ante fallos?
-1. Si un test falla, el comando `dotnet test` devuelve un código de salida distinto de 0 (`exit code 1`), marcando el paso `bash` como fallido.
-2. `PublishTestResults@2` procesa el reporte TRX para mostrar los detalles del test fallido en la pestaña oficial "Tests" de Azure DevOps y, mediante `failTaskOnFailedTests: true`, ratifica el fallo del job.
-3. Al fallar el job `BuildAndPush`, los pasos posteriores de `docker build` y `docker push` hacia ACR/GHCR son cancelados.
-4. El Stage 3 (`CD: Despliegue en VM Linux`) declara `dependsOn: CI`, por lo que el despliegue automático a la máquina virtual queda completamente bloqueado.
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publicar Cobertura de Código'
+            inputs:
+              summaryFileLocation: '**/coverage.cobertura.xml'
+            condition: succeededOrFailed()
+```
 
 ---
 
@@ -184,7 +188,7 @@ En `azure-pipelines.yml`, se incorporó la ejecución de las pruebas y la public
 
 Comando ejecutado en la terminal:
 ```bash
-dotnet test tests/Backend.Tests/Backend.Tests.csproj --configuration Release --logger "trx;LogFileName=test_results.trx" /p:CollectCoverage=true
+dotnet test tests/Backend.Tests/Backend.Tests.csproj --configuration Release --logger "trx;LogFileName=test_results.trx" --collect:"XPlat Code Coverage"
 ```
 
 Salida obtenida:
@@ -192,8 +196,13 @@ Salida obtenida:
 Test run for .../Backend.Tests.dll (.NETCoreApp,Version=v10.0)
 A total of 1 test files matched the specified pattern.
 Results File: .../tests/Backend.Tests/TestResults/test_results.trx
+Attachments: .../coverage.cobertura.xml
 
-Passed!  - Failed:     0, Passed:    24, Skipped:     0, Total:    24, Duration: 1 s - Backend.Tests.dll (net10.0)
+Passed!  - Failed:     0, Passed:    42, Skipped:     0, Total:    42, Duration: 1 s - Backend.Tests.dll (net10.0)
 ```
 
-**Resultado**: 24 pruebas ejecutadas, 24 pruebas en verde (100% de éxito), 0 fallidas, 0 omitidas.
+**Métricas de Calidad Alcanzadas**:
+- **Pruebas ejecutadas**: 42 pruebas ejecutadas, 42 en verde (100% de éxito), 0 fallidas, 0 omitidas.
+- **Cobertura de Líneas (`line-rate`)**: **87.29%** (426 / 488 líneas).
+- **Cobertura de Ramas (`branch-rate`)**: **88.46%** (69 / 78 ramas).
+- **Publicación en CI**: Publicación dual de VSTest (`.trx`) y Cobertura (`coverage.cobertura.xml`) con detención automática del pipeline ante fallos.

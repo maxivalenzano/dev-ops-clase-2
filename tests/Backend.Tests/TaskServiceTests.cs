@@ -250,4 +250,133 @@ public class TaskServiceTests
         Assert.Single(remaining);
         Assert.Equal(task1.Id, remaining[0].Id);
     }
+
+    [Fact]
+    public void Constructor_WithNullDatabase_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new TaskService((IDatabase)null!));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetTaskByIdAsync_WithInvalidId_ReturnsNull(string? invalidId)
+    {
+        var service = new TaskService((IConnectionMultiplexer?)null);
+        var result = await service.GetTaskByIdAsync(invalidId!);
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ToggleTaskAsync_WithInvalidId_ReturnsNull(string? invalidId)
+    {
+        var service = new TaskService((IConnectionMultiplexer?)null);
+        var result = await service.ToggleTaskAsync(invalidId!);
+        Assert.Null(result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task DeleteTaskAsync_WithInvalidId_ReturnsFalse(string? invalidId)
+    {
+        var service = new TaskService((IConnectionMultiplexer?)null);
+        var result = await service.DeleteTaskAsync(invalidId!);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task GetAllTasksAsync_WhenRedisThrows_FallsBackToInMemoryGracefully()
+    {
+        var mockDb = new Mock<IDatabase>();
+        mockDb.Setup(d => d.HashGetAllAsync(It.IsAny<RedisKey>(), CommandFlags.None))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+
+        var service = new TaskService(mockDb.Object);
+
+        // Act
+        var result = await service.GetAllTasksAsync();
+
+        // Assert - no arroja excepción, devuelve colección vacía del in-memory fallback
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+
+    [Fact]
+    public async Task CreateTaskAsync_WhenRedisThrows_FallsBackToInMemoryGracefully()
+    {
+        var mockDb = new Mock<IDatabase>();
+        mockDb.Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+        mockDb.Setup(d => d.HashGetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), CommandFlags.None))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+
+        var service = new TaskService(mockDb.Object);
+
+        // Act
+        var task = await service.CreateTaskAsync("Fallback Task", "node-fallback");
+
+        // Assert
+        Assert.NotNull(task);
+        Assert.Equal("Fallback Task", task.Title);
+
+        // Al arrojar Redis también en lectura, debe recuperar desde el almacén en memoria
+        var retrieved = await service.GetTaskByIdAsync(task.Id);
+        Assert.NotNull(retrieved);
+        Assert.Equal(task.Id, retrieved.Id);
+    }
+
+    [Fact]
+    public async Task ToggleTaskAsync_WhenRedisThrows_FallsBackToInMemoryGracefully()
+    {
+        var mockDb = new Mock<IDatabase>();
+        // Hacer que Redis falle tanto en escritura como en lectura
+        mockDb.Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+        mockDb.Setup(d => d.HashGetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), CommandFlags.None))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+
+        var service = new TaskService(mockDb.Object);
+
+        // Creamos en fallback directamente
+        var task = await service.CreateTaskAsync("Test Toggle Fallback", "node-1");
+
+        // Act
+        var toggled = await service.ToggleTaskAsync(task.Id);
+
+        // Assert
+        Assert.NotNull(toggled);
+        Assert.True(toggled.IsCompleted);
+    }
+
+    [Fact]
+    public async Task DeleteTaskAsync_WhenRedisThrows_FallsBackToInMemoryGracefully()
+    {
+        var mockDb = new Mock<IDatabase>();
+        mockDb.Setup(d => d.HashSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+        mockDb.Setup(d => d.HashDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), CommandFlags.None))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+        mockDb.Setup(d => d.HashGetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), CommandFlags.None))
+              .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis offline"));
+
+        var service = new TaskService(mockDb.Object);
+
+        var task = await service.CreateTaskAsync("Test Delete Fallback", "node-1");
+
+        // Act
+        var deleted = await service.DeleteTaskAsync(task.Id);
+
+        // Assert
+        Assert.True(deleted);
+        var retrieved = await service.GetTaskByIdAsync(task.Id);
+        Assert.Null(retrieved);
+    }
 }
+
