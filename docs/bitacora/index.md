@@ -6,6 +6,11 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Implementación Etapa 3 - Cluster de 3 Nodos Backend con Nginx y Alta Disponibilidad**](/bitacora/2026-09-14-etapa-3-nginx-cluster-3-nodos)
+  - Escalado a 3 réplicas del microservicio backend (`backend-1`, `backend-2`, `backend-3`) con límites de recursos simétricos.
+  - Configuración del upstream `backend_cluster` en Nginx con balanceo Round-Robin y detección de fallos.
+  - Failover transparente sin caída (Zero-Downtime) con `proxy_next_upstream` y 3 reintentos (`proxy_next_upstream_tries 3`).
+  - Persistencia compartida en Redis con visualización de firmas de nodo (`createdByNode` y `servedByNode`) en la UI.
 - [**2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias Backend (.NET 10 con xUnit, Moq y CI Gatekeeper)**](/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit)
   - Creación del proyecto `tests/Backend.Tests` en .NET 10 con xUnit, Moq y Microsoft.AspNetCore.Mvc.Testing.
   - Separación limpia en modelos (`TaskItem`) y capa de servicios (`ITaskService`, `TaskService`) con fallback resiliente.

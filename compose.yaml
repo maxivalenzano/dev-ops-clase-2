@@ -14,6 +14,8 @@ services:
     depends_on:
       - frontend
       - backend-1
+      - backend-2
+      - backend-3
     networks:
       - lab-network
 
@@ -41,6 +43,50 @@ services:
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-1
+      - REDIS_CONNECTION=redis:6379
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+    networks:
+      - lab-network
+
+  # Backend Instance 2 (.NET 10 Minimal API)
+  backend-2:
+    build:
+      context: ./backend
+      dockerfile: Containerfile
+    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/backend:${IMAGE_TAG:-2.0.0}
+    container_name: lab-backend-2
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - PORT=3000
+      - INSTANCE_NAME=backend-dotnet-2
+      - REDIS_CONNECTION=redis:6379
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+    networks:
+      - lab-network
+
+  # Backend Instance 3 (.NET 10 Minimal API)
+  backend-3:
+    build:
+      context: ./backend
+      dockerfile: Containerfile
+    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/backend:${IMAGE_TAG:-2.0.0}
+    container_name: lab-backend-3
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - PORT=3000
+      - INSTANCE_NAME=backend-dotnet-3
       - REDIS_CONNECTION=redis:6379
     deploy:
       resources:

@@ -91,6 +91,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-09-14: Etapa 3 - Cluster 3 Nodos & Nginx HA', link: '/bitacora/2026-09-14-etapa-3-nginx-cluster-3-nodos' },
             { text: '2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias .NET 10', link: '/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit' },
             { text: '2026-09-13: Etapa 2 - Frontend Tablero Distribuido', link: '/bitacora/2026-09-13-etapa-2-frontend-tablero-distribuido' },
             { text: '2026-09-13: TP 1 - Etapa 1: Redis y Firma de Nodos', link: '/bitacora/2026-09-13-tp1-etapa-1-redis-node-signature' },
