@@ -6,6 +6,13 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Troubleshooting de Quality Gate: SonarQube Cloud API 403, Gobernanza de Branches y Migración v4**](/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate)
+  - Resolución del error 403 Forbidden en `SonarCloudPublish` por token de análisis sin permisos de lectura (`Browse`).
+  - Diagnóstico de limitaciones del plan Free de SonarQube Cloud y configuración de visibilidad pública del proyecto.
+  - Sincronización de `devel` como `MAIN BRANCH` oficial para habilitar el análisis gratuito en la rama de integración.
+  - Blindaje condicional en `azure-pipelines.yml` para ejecutar SAST exclusivamente en `devel` sin bloquear tags (`v*`) ni releases.
+  - Migración a tareas oficiales v4 (`SonarCloudPrepare@4`, `SonarCloudAnalyze@4`, `SonarCloudPublish@4`) y corrección de advertencias de SCM y cobertura.
+
 - [**2026-09-14: Refactorización de Pipeline CI/CD: Arquitectura Desacoplada en 4 Stages**](/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops)
   - Desacoplamiento del CI monolítico en dos etapas independientes: Quality Gate (Tests + SAST) y Packaging OCI.
   - Implementación de principio Fail-Fast: bloqueo inmediato de construcción de contenedores ante fallos de calidad o seguridad.

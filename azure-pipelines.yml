@@ -137,6 +137,7 @@ stages:
           vmImage: 'ubuntu-latest'
         steps:
           - checkout: self
+            fetchDepth: 0 # Historial completo requerido por SonarQube Cloud para SCM Blame y ramas
 
           - task: UseDotNet@2
             displayName: 'Instalar .NET 10 SDK'
@@ -145,9 +146,10 @@ stages:
               version: '10.x'
             continueOnError: true # No bloquea si el agente de Azure aún no tiene el feed oficial
 
-          # 1. Preparar Análisis de SonarQube Cloud (SAST)
-          - task: SonarCloudPrepare@3
+          # 1. Preparar Análisis de SonarQube Cloud (SAST) - Solo en rama devel por limitación de plan Free
+          - task: SonarCloudPrepare@4
             displayName: 'Preparar Análisis SonarQube Cloud'
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/devel'))
             inputs:
               SonarCloud: 'SonarCloud'
               organization: 'maxivalenzano'
@@ -155,7 +157,7 @@ stages:
               projectKey: 'maxivalenzano_DevOps'
               projectName: 'DevOps'
               extraProperties: |
-                sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.opencover.xml,$(Build.SourcesDirectory)/**/coverage.opencover.xml
+                sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.opencover.xml
                 sonar.cs.vstest.reportsPaths=$(Agent.TempDirectory)/**/*.trx
                 sonar.exclusions=**/obj/**,**/bin/**,**/dist/**,**/node_modules/**
 
@@ -171,6 +173,7 @@ stages:
               dotnet test tests/Backend.Tests/Backend.Tests.csproj \
                 --configuration Release \
                 --logger "trx;LogFileName=test_results.trx" \
+                --results-directory $(Agent.TempDirectory) \
                 --collect:"XPlat Code Coverage" \
                 -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover,cobertura
             displayName: 'Ejecutar Tests Unitarios (.NET 10)'
@@ -179,25 +182,26 @@ stages:
             displayName: 'Publicar Resultados de Tests'
             inputs:
               testResultsFormat: 'VSTest'
-              testResultsFiles: '**/test_results.trx'
+              testResultsFiles: '$(Agent.TempDirectory)/**/test_results.trx'
               failTaskOnFailedTests: true
             condition: succeededOrFailed()
 
           - task: PublishCodeCoverageResults@2
             displayName: 'Publicar Cobertura de Código'
             inputs:
-              summaryFileLocation: '**/coverage.cobertura.xml'
+              summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
             condition: succeededOrFailed()
 
           # 4. Ejecutar Análisis y Quality Gate en SonarQube Cloud
-          - task: SonarCloudAnalyze@3
+          - task: SonarCloudAnalyze@4
             displayName: 'Ejecutar Análisis SAST en SonarQube Cloud'
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/devel'))
 
-          - task: SonarCloudPublish@3
+          - task: SonarCloudPublish@4
             displayName: 'Evaluar y Publicar Quality Gate SonarQube Cloud'
             inputs:
               pollingTimeoutSec: '300'
-            continueOnError: true
+            condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/devel'))
 
       # Job B: Validación de Frontend React y Auditoría de Vulnerabilidades
       - job: FrontendAndSecurity
