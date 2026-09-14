@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: TP 1 - Etapa 1: Persistencia en Redis y Tablero Distribuido con Firma de Nodos**](/bitacora/2026-09-13-tp1-etapa-1-redis-node-signature)
+  - Almacenamiento centralizado de tareas en Redis (`redis:7-alpine`) con volumen persistente `redis-data`.
+  - Arquitectura *Node Signature Board* con firma de creación (`createdByNode`) y servicio (`servedByNode`).
+  - Integración de `StackExchange.Redis` en backend .NET 10 con conexión tolerante a fallos (`AbortOnConnectFail = false`).
+  - Endpoints REST completos bajo `/api/tasks` manteniendo compatibilidad con endpoints de diagnóstico y caos.
+
 - [**2026-09-13: Gobernanza en CD con Quality Gates, GitHub Deployments y Troubleshooting YAML**](/bitacora/2026-09-13-gobernanza-deployments-quality-gate)
   - Paso de Continuous Deployment a Continuous Delivery con compuertas de calidad manuales (Approvals).
   - Configuración de `devops-vm-env` y resolución de deadlocks con *"Allow approvers to approve their own runs"*.
