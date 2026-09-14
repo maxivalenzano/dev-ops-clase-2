@@ -2,6 +2,7 @@
 ### UTN FRRe | DevOps – Cultura, Herramientas y Procesos | Ciclo Lectivo 2026
 
 [![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://devops-maxivalenzano.com)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Presentaci%C3%B3n%20Online-blue?style=flat&logo=githubpages&logoColor=white)](https://maxivalenzano.github.io/dev-ops-clase-2/presentacion/)
 [![Informe TP1](https://img.shields.io/badge/Informe-TP1%20(UTN%20FRRe)-red?style=flat&logo=markdown&logoColor=white)](INFORME_TP1.md)
 [![Portainer CE](https://img.shields.io/badge/Portainer-Dashboard%20(Puerto%209000)-059669?style=flat&logo=portainer&logoColor=white)](http://devops-maxivalenzano.com:9000)
 [![Azure Pipelines Build](https://dev.azure.com/maxivalenzano/DevOps/_apis/build/status/maxivalenzano.dev-ops-clase-2?branchName=devel)](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel)
@@ -19,11 +20,12 @@
 
 ## 🌟 Accesos Rápidos en Vivo
 
+* 🎓 **Presentación Técnica y Defensa Oficial**: [GitHub Pages — Presentación Online](https://maxivalenzano.github.io/dev-ops-clase-2/presentacion/)
 * 🌐 **Aplicación Web en Producción**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com) *(IP directa: `http://68.211.137.116`)*
 * 🐳 **Gestor Visual de Contenedores (Portainer CE)**: [http://devops-maxivalenzano.com:9000](http://devops-maxivalenzano.com:9000)
 * 📄 **Informe Académico Formal del TP 1**: [INFORME_TP1.md](INFORME_TP1.md)
 * 🛡️ **Dashboard de Calidad y Seguridad**: [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
-* 📚 **Documentación Técnica y Bitácora**: [VitePress Docs](docs/)
+* 📚 **Documentación Técnica y Bitácora**: [VitePress Docs](https://maxivalenzano.github.io/dev-ops-clase-2/)
 
 ---
 

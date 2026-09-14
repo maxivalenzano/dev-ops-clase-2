@@ -4,7 +4,7 @@ export default defineConfig({
   title: 'DevOps & Podman Lab',
   description: 'Documentación técnica, arquitectura y bitácora del laboratorio de microservicios y contenedores',
   lang: 'es-AR',
-  base: '/',
+  base: process.env.GITHUB_ACTIONS ? '/dev-ops-clase-2/' : (process.env.VITEPRESS_BASE || '/'),
   lastUpdated: true,
   cleanUrls: true,
 
@@ -39,6 +39,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Inicio', link: '/' },
+      { text: '🎓 Presentación', link: '/presentacion/' },
       { text: 'Informe TP1', link: '/general/informe-tp1' },
       { text: 'Arquitectura', link: '/general/overview' },
       { text: 'Backend', link: '/backend/' },
@@ -48,6 +49,23 @@ export default defineConfig({
     ],
 
     sidebar: {
+      '/presentacion/': [
+        {
+          text: 'Defensa Técnica Oficial',
+          items: [
+            { text: '🎓 Presentación Ejecutiva', link: '/presentacion/' },
+            { text: '🗺️ Mapa Conceptual End-to-End', link: '/presentacion/#mapa-conceptual-de-alto-nivel-end-to-end' },
+            { text: '1. Stack Tecnológico', link: '/presentacion/#1-stack-tecnologico-integral' },
+            { text: '2. Máquina Virtual Azure (IaaS)', link: '/presentacion/#2-maquina-virtual-usada-en-azure-iaas' },
+            { text: '3. Modelo de Arquitectura en Azure', link: '/presentacion/#3-modelo-de-arquitectura-y-red-en-azure' },
+            { text: '4. Pipeline en Azure DevOps', link: '/presentacion/#4-conexion-del-pipeline-en-azure-devops' },
+            { text: '5. Azure Container Registry & GHCR', link: '/presentacion/#5-azure-container-registry-acr-y-carga-a-github-ghcr' },
+            { text: '6. Los 4 Stages del Pipeline', link: '/presentacion/#6-los-4-stages-del-pipeline-ci-cd-devsecops' },
+            { text: '7. Portainer CE & Observabilidad', link: '/presentacion/#7-observabilidad-y-operaciones-con-portainer-ce' },
+            { text: '🎯 Resumen de Evaluación', link: '/presentacion/#resumen-ejecutivo-para-la-evaluacion' }
+          ]
+        }
+      ],
       '/general/': [
         {
           text: 'Visión General',

@@ -4,29 +4,35 @@ layout: home
 hero:
   name: "DevOps & Podman Lab"
   text: "Laboratorio de Microservicios y Contenedores"
-  tagline: "Arquitectura de alta resiliencia con Nginx, .NET 8, React, Azure y Contenedores."
+  tagline: "Arquitectura resiliente en Azure VM con Nginx, .NET 10, React 18, Redis, Portainer CE y CI/CD en 4 Stages."
   actions:
     - theme: brand
-      text: Ver Arquitectura
-      link: /general/overview
+      text: 🎓 Ver Presentación Oficial
+      link: /presentacion/
     - theme: alt
-      text: Ir a la Bitácora
+      text: 📄 Informe TP1
+      link: /general/informe-tp1
+    - theme: alt
+      text: 📝 Bitácora de Trabajo
       link: /bitacora/
 
 features:
+  - icon: 🎓
+    title: Presentación Técnica Integral
+    details: "Síntesis ejecutiva de todo el ecosistema: Azure VM (IaaS), NSG, pipeline de 4 stages, registro dual ACR/GHCR y Portainer."
+  - icon: 🚢
+    title: Portainer CE & Observabilidad
+    details: "Monitoreo visual de 10 contenedores en tiempo real sobre el puerto 9000, con métricas de CPU/RAM y soporte para Chaos Testing."
+  - icon: 🛡️
+    title: DevSecOps & SonarQube Cloud
+    details: "Pipeline automatizado con cálculo SemVer dinámico, 42 tests xUnit, escaneo SAST y auditoría de vulnerabilidades con Trivy."
+  - icon: ⚖️
+    title: Nginx Gateway & Resiliencia
+    details: "Clúster de 3 réplicas Frontend y 3 réplicas Backend con balanceo Round Robin, failover activo y timeout de 5 segundos."
   - icon: 🦭
     title: Podman & Pods Nativos
-    details: Exploración de contenedores rootless y Pods que comparten el namespace de red sobre localhost (estilo Kubernetes).
-  - icon: ⚖️
-    title: Nginx Gateway & Load Balancing
-    details: Reverse proxy con balanceo Round Robin, failover activo, timeout tuning (5s) y páginas de error JSON personalizadas.
+    details: "Comparativa entre contenedores rootless locales con red compartida localhost y orquestación con Docker Compose en Azure."
   - icon: 💥
     title: Chaos & Stress Testing
-    details: Simulación de saturación de CPU, consumo extremo de RAM (OOM Killer), delays de red y degradación de health checks.
-  - icon: ⚛️
-    title: Frontend React SPA
-    details: Dashboard interactivo para disparar experimentos, monitorizar estado en tiempo real e inspeccionar respuestas.
-  - icon: 📝
-    title: Bitácora de Aprendizaje
-    details: Registro continuo de cambios, pruebas de laboratorio, decisiones arquitectónicas y troubleshooting paso a paso.
+    details: "Simulación de consumo extremo de RAM para activar el OOM Killer del kernel Linux, saturación de CPU y degradación de salud."
 ---
