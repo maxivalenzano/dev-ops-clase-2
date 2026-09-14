@@ -1,10 +1,11 @@
   # ==============================================================================
 # Pipeline CI/CD Multi-Stage - DevOps Lab
 # ==============================================================================
-# Flujo desacoplado:
+# Flujo desacoplado en 4 Stages:
 # 1. Versioning: Cálculo automático de SemVer mediante Conventional Commits.
-# 2. CI: Compilación, tests y empaquetado OCI hacia Azure Container Registry (ACR).
-# 3. CD: Despliegue continuo hacia la VM Ubuntu en Azure mediante Docker Compose.
+# 2. Quality Gate: Pruebas unitarias (.NET 10 xUnit), Cobertura, SonarQube Cloud SAST y Trivy.
+# 3. Packaging: Empaquetado inmutable y publicación OCI hacia Azure Container Registry (ACR) y GHCR.
+# 4. CD: Despliegue continuo hacia la VM Ubuntu en Azure mediante Docker Compose y Release Notes.
 # ==============================================================================
 
 name: $(Date:yyyyMMdd)$(Rev:.r)
@@ -123,16 +124,15 @@ stages:
             displayName: 'Determinar Tag SemVer'
 
   # ----------------------------------------------------------------------------
-  # STAGE 2: INTEGRACIÓN CONTINUA (CI) - TEST & BUILD DE IMÁGENES DOCKER
+  # STAGE 2: QUALITY GATE & SAST (PRUEBAS, COBERTURA Y ANÁLISIS ESTÁTICO)
   # ----------------------------------------------------------------------------
-  - stage: CI
-    displayName: '2. CI: Build & Push a ACR'
+  - stage: QualityGate
+    displayName: '2. Quality Gate & SAST'
     dependsOn: Versioning
-    variables:
-      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
-      - job: BuildAndPush
-        displayName: 'Compilar y Publicar Contenedores'
+      # Job A: Calidad y Pruebas Unitarias Backend con SonarQube Cloud
+      - job: BackendQuality
+        displayName: 'Backend .NET 10 (Tests & SonarCloud)'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -199,15 +199,15 @@ stages:
               pollingTimeoutSec: '300'
             continueOnError: true
 
-          # 5. Análisis SAST Complementario de Contenedores y Dependencias (Trivy)
-          - bash: |
-              echo "==> Ejecutando auditoría de seguridad SAST con Trivy..."
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-              trivy fs --severity HIGH,CRITICAL --exit-code 0 .
-            displayName: 'Auditoría SAST (Trivy Security Scanner)'
-            continueOnError: true
+      # Job B: Validación de Frontend React y Auditoría de Vulnerabilidades
+      - job: FrontendAndSecurity
+        displayName: 'Frontend React 18 & Auditoría Trivy'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
 
-          # 6. Validación de compilación de Frontend
+          # 1. Validación de compilación de Frontend
           - bash: |
               echo "==> Verificando dependencias y build de Frontend React..."
               cd frontend
@@ -215,14 +215,40 @@ stages:
               npm run build
             displayName: 'Validar Frontend (React 18 / Vite)'
 
-          # 4. Autenticación contra Azure Container Registry
+          # 2. Análisis SAST Complementario de Contenedores y Dependencias (Trivy)
+          - bash: |
+              echo "==> Ejecutando auditoría de seguridad SAST con Trivy..."
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              trivy fs --severity HIGH,CRITICAL --exit-code 0 .
+            displayName: 'Auditoría SAST (Trivy Security Scanner)'
+            continueOnError: true
+
+  # ----------------------------------------------------------------------------
+  # STAGE 3: PACKAGING (BUILD & PUSH DE IMÁGENES DOCKER / OCI)
+  # ----------------------------------------------------------------------------
+  - stage: Packaging
+    displayName: '3. Packaging: Build & Push OCI'
+    dependsOn:
+      - Versioning
+      - QualityGate
+    variables:
+      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
+    jobs:
+      - job: BuildAndPushContainers
+        displayName: 'Compilar y Publicar Contenedores (ACR & GHCR)'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          # 1. Autenticación contra Azure Container Registry
           - task: Docker@2
             displayName: 'Docker Login a ACR'
             inputs:
               command: 'login'
               containerRegistry: $(acrServiceConnection)
 
-          # 5. Construcción y publicación de Backend a ACR y GHCR
+          # 2. Construcción y publicación de Backend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Backend con tag: $(SEMVER_TAG)"
               docker build \
@@ -253,7 +279,7 @@ stages:
             env:
               GITHUB_PAT: $(GITHUB_PAT)
 
-          # 6. Construcción y publicación de Frontend a ACR y GHCR
+          # 3. Construcción y publicación de Frontend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
               docker build \
@@ -286,13 +312,13 @@ stages:
               GITHUB_PAT: $(GITHUB_PAT)
 
   # ----------------------------------------------------------------------------
-  # STAGE 3: ENTREGA CONTINUA (CD) - DESPLIEGUE A VM LINUX EN AZURE
+  # STAGE 4: ENTREGA CONTINUA (CD) - DESPLIEGUE A VM LINUX EN AZURE
   # ----------------------------------------------------------------------------
   - stage: CD
-    displayName: '3. CD: Despliegue en VM Linux'
+    displayName: '4. CD: Despliegue en VM Linux'
     dependsOn:
       - Versioning
-      - CI
+      - Packaging
     condition: and(succeeded(), in(variables['Build.SourceBranch'], 'refs/heads/main', 'refs/heads/devel', 'refs/tags/v*'), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]

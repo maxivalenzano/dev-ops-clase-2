@@ -133,21 +133,20 @@ Open your browser at **`http://localhost:8080`** to access the interactive dashb
 
 ---
 
-## 🛡️ CI/CD Quality Gate & SAST (DevSecOps)
+## 🛡️ CI/CD Quality Gate & SAST (DevSecOps - 4 Stages)
 
-El pipeline automatizado en Azure DevOps implementa prácticas estrictas de **DevSecOps** antes de cualquier publicación o despliegue continuo:
+El pipeline automatizado en Azure DevOps está desacoplado en **4 Stages secuenciales e independientes**:
 
-1. **Pruebas Unitarias Automatizadas (.NET 10 & xUnit)**:
-   - Ejecución de 42 pruebas unitarias cubriendo modelos, servicios Redis con fallback en memoria, endpoints de salud y escenarios de caos.
-   - Publicación nativa de resultados VSTest (`test_results.trx`) y cobertura en formato Cobertura y OpenCover.
-2. **Análisis Estático de Seguridad de Código (SAST con SonarQube Cloud)**:
-   - Integración directa con el escáner oficial de SonarQube Cloud para .NET (`MSBuild / dotnet`).
-   - Detección estática de vulnerabilidades, *Security Hotspots*, *Code Smells* y bugs.
-   - Evaluación automatizada del **Quality Gate** que certifica la salud del código antes del empaquetado OCI.
-3. **Auditoría de Vulnerabilidades en Dependencias y Contenedores (Trivy)**:
-   - Escaneo SAST complementario mediante **Trivy** para detectar CVEs en dependencias NuGet/npm y malas prácticas en los `Containerfile`.
-4. **Gobernanza y Badges Oficiales**:
-   - Métricas y estados en tiempo real visibles en la cabecera del repositorio (Azure Pipelines Build, SonarCloud Quality Gate, Security Rating, Vulnerabilities y Coverage).
+1. **Stage 1: Semantic Versioning (SemVer)**:
+   - Cálculo automático de versión SemVer (`MAJOR.MINOR.PATCH`) mediante Conventional Commits.
+2. **Stage 2: Quality Gate & SAST (Validación & Seguridad)**:
+   - **Backend Job**: Ejecución de 42 pruebas unitarias (.NET 10 & xUnit), recolección de cobertura dual (Cobertura + OpenCover) y análisis estático con **SonarQube Cloud** (`scannerMode: dotnet`).
+   - **Frontend & Security Job**: Validación de compilación SPA (React 18 / Vite) y escaneo de vulnerabilidades en dependencias y Containerfiles con **Trivy Scanner**.
+   - Si el Quality Gate falla, el pipeline se detiene inmediatamente (**Fail-Fast**).
+3. **Stage 3: Packaging (Build & Push OCI)**:
+   - Construcción inmutable de imágenes multi-stage y publicación hacia Azure Container Registry (ACR) y GitHub Packages (GHCR) etiquetadas con `SEMVER_TAG` y `latest`.
+4. **Stage 4: CD (Continuous Delivery en Azure VM)**:
+   - Despliegue en la VM Ubuntu en Azure mediante Docker Compose, verificación con Smoke Tests, inyección de Changelog dinámico y creación de GitHub Releases.
 
 ---
 
