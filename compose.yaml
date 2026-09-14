@@ -148,9 +148,24 @@ services:
     networks:
       - lab-network
 
+  # 5. Visual Container Management UI (Portainer CE)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: lab-portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - lab-network
+
 networks:
   lab-network:
     driver: bridge
 
 volumes:
   redis-data:
+  portainer-data:
