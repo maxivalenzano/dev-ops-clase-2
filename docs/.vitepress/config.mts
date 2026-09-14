@@ -39,6 +39,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Inicio', link: '/' },
+      { text: 'Informe TP1', link: '/general/informe-tp1' },
       { text: 'Arquitectura', link: '/general/overview' },
       { text: 'Backend', link: '/backend/' },
       { text: 'Frontend', link: '/frontend/' },
@@ -51,6 +52,7 @@ export default defineConfig({
         {
           text: 'Visión General',
           items: [
+            { text: '📄 Informe TP1 Oficial', link: '/general/informe-tp1' },
             { text: 'Arquitectura y Flujo', link: '/general/overview' },
             { text: 'Podman vs Docker', link: '/general/podman-vs-docker' }
           ]

@@ -1,6 +1,7 @@
 # 🚀 Podman Container & Microservices Lab
 
 [![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://devops-maxivalenzano.com)
+[![Informe TP1](https://img.shields.io/badge/Informe-TP1%20(UTN%20FRRe)-red?style=flat&logo=markdown&logoColor=white)](INFORME_TP1.md)
 [![GitHub Release](https://img.shields.io/github/v/release/maxivalenzano/dev-ops-clase-2?color=blue&logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/releases)
 [![Changelog](https://img.shields.io/badge/Changelog-Keep%20a%20Changelog-orange?logo=git&logoColor=white)](CHANGELOG.md)
 [![Azure Pipelines Build](https://dev.azure.com/maxivalenzano/DevOps/_apis/build/status/maxivalenzano.dev-ops-clase-2?branchName=devel)](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel)
@@ -16,7 +17,9 @@
 
 A lightweight, hands-on lab designed to master **Podman**, container orchestration, **Nginx** reverse proxying, load balancing, timeouts, resource limits (CPU/OOM), and native **Podman Pods** (`localhost` network sharing). Deployed automatically to Azure VM via Azure DevOps Multi-Stage CI/CD.
 
-👉 **Live Application**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com)
+👉 **Informe TP 1 (UTN FRRe)**: [INFORME_TP1.md](INFORME_TP1.md)  
+👉 **Live Application**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com)  
+👉 **Container Management (Portainer CE)**: [http://devops-maxivalenzano.com:9000](http://devops-maxivalenzano.com:9000)  
 
 ---
 
