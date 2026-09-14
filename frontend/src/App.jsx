@@ -165,124 +165,134 @@ export default function App() {
     setLogs([]);
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchServerInfo();
+      fetchFrontendInfo();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [autoRefresh]);
+
+  const handleRefreshNodes = async () => {
+    setIsRefreshing(true);
+    await Promise.all([fetchServerInfo(), fetchFrontendInfo()]);
+    setTimeout(() => setIsRefreshing(false), 400);
+  };
+
   return (
     <div className="container">
-      {/* Header */}
+      {/* Encabezado Principal */}
       <header className="header">
-        <div>
-          <h1>
-            <span>🚀</span> Podman Multi-Tier Lab
-            <span style={{
-              marginLeft: '0.75rem',
-              fontSize: '0.75rem',
-              padding: '0.2rem 0.55rem',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(56, 189, 248, 0.15)',
-              border: '1px solid rgba(56, 189, 248, 0.4)',
-              color: 'var(--accent-blue, #38bdf8)',
-              fontWeight: 600,
-              verticalAlign: 'middle'
-            }}>
+        <div className="header-brand">
+          <div className="header-title-row">
+            <h1>
+              <span>🚀</span> ChaosNet • Panel de Control
+            </h1>
+            <span className="header-version">
               v{import.meta.env.VITE_APP_VERSION || '2.0.0'}
             </span>
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            React 18 (Cluster HA) + .NET Minimal API + Redis + Nginx Reverse Proxy
-          </p>
+          </div>
+
+          <div className="header-arch-bar">
+            <span className="arch-pill" style={{ color: 'var(--accent-blue)', borderColor: 'rgba(59, 130, 246, 0.35)', fontWeight: 600 }} title="Plataforma ChaosNet Lab">
+              ⚡ ChaosNet Lab
+            </span>
+            <span className="arch-sep">|</span>
+            <span className="arch-pill" title="Puerta de enlace Nginx con balanceo y timeouts configurados">
+              🌐 Nginx Gateway (Port 80/8080)
+            </span>
+            <span className="arch-sep">➔</span>
+            <span className="arch-pill" title="Contenedores estáticos de Vite/React en alta disponibilidad">
+              ⚛️ SPA React Cluster
+            </span>
+            <span className="arch-sep">➔</span>
+            <span className="arch-pill" title="Réplicas de microservicio .NET 10 Minimal API">
+              ⚙️ API .NET Replicas
+            </span>
+            <span className="arch-sep">➔</span>
+            <span className="arch-pill" title="Almacén en memoria persistente y centralizado">
+              ⚡ Redis Cache
+            </span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Frontend Node Badge */}
-          {frontendInfo ? (
-            <span style={{
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.35)',
-              color: 'var(--accent-blue, #38bdf8)',
-              padding: '0.35rem 0.65rem',
-              borderRadius: '9999px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontWeight: 600,
-              fontSize: '0.85rem'
-            }}>
-              🖥️ UI: <strong className="mono">{frontendInfo.instance || 'frontend-react'}</strong>
-            </span>
-          ) : (
-            <span style={{
-              backgroundColor: 'rgba(148, 163, 184, 0.1)',
-              border: '1px solid rgba(148, 163, 184, 0.25)',
-              color: 'var(--text-muted)',
-              padding: '0.35rem 0.65rem',
-              borderRadius: '9999px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.85rem'
-            }}>
-              🖥️ UI: <span className="mono">Cargando...</span>
-            </span>
-          )}
 
-          {/* Backend API Badge */}
+        <div className="header-actions">
+          {/* Badge del Nodo Frontend */}
+          <div className="header-node-badge ui-node" title="Instancia de contenedor que sirve los assets estáticos del frontend">
+            <span>🖥️ UI:</span>
+            <strong className="mono">{frontendInfo?.instance || 'Cargando...'}</strong>
+          </div>
+
+          {/* Badge del Nodo Backend */}
           {serverInfo ? (
-            <span style={{
-              backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.35)',
-              color: 'var(--accent-green, #10b981)',
-              padding: '0.35rem 0.65rem',
-              borderRadius: '9999px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontWeight: 600,
-              fontSize: '0.85rem'
-            }}>
-              ● API: <strong className="mono">{serverInfo.instance || 'OK'}</strong>
-            </span>
+            <div className="header-node-badge api-node-up" title="Instancia de backend que atendió la última solicitud">
+              <span className="pulse-dot" style={{ backgroundColor: 'var(--accent-green)' }} />
+              <span>API:</span>
+              <strong className="mono">{serverInfo.instance || 'OK'}</strong>
+            </div>
           ) : (
-            <span style={{
-              backgroundColor: 'rgba(244, 63, 94, 0.12)',
-              border: '1px solid rgba(244, 63, 94, 0.35)',
-              color: 'var(--accent-rose, #f43f5e)',
-              padding: '0.35rem 0.65rem',
-              borderRadius: '9999px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.85rem'
-            }}>
-              ○ API: Sin conexión
-            </span>
+            <div className="header-node-badge api-node-down" title="Sin respuesta del servicio backend">
+              <span className="pulse-dot" style={{ backgroundColor: 'var(--accent-rose)' }} />
+              <span>API: Desconectada</span>
+            </div>
           )}
 
-          <button onClick={() => { fetchServerInfo(); fetchFrontendInfo(); }}>🔄 Refresh Node Info</button>
+          {/* Toggle de Monitoreo en Vivo */}
+          <button
+            className={`header-refresh-btn ${autoRefresh ? 'success' : ''}`}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            title={autoRefresh ? 'Desactivar consulta periódica automática' : 'Activar consulta automática cada 4 segundos'}
+          >
+            {autoRefresh ? '🟢 En Vivo (4s)' : '⏸️ Polling'}
+          </button>
+
+          {/* Botón de Refresco Manual */}
+          <button
+            className="header-refresh-btn"
+            onClick={handleRefreshNodes}
+            disabled={isRefreshing}
+            title="Actualizar estado de réplicas y firmas de nodo"
+          >
+            <span className={isRefreshing ? 'refresh-spinning' : ''}>🔄</span>
+            <span>{isRefreshing ? 'Consultando...' : 'Actualizar'}</span>
+          </button>
         </div>
       </header>
 
-      {/* Navigation Tabs */}
+      {/* Navegación por Pestañas */}
       <nav className="tabs-nav">
         <button
           className={`tab-button ${activeTab === 'board' ? 'active' : ''}`}
           onClick={() => setActiveTab('board')}
+          title="Gestión de tareas sincronizadas en Redis con firma de nodo"
         >
-          <span>📋</span> Tablero Distribuido
+          <span>📋</span>
+          <div style={{ textAlign: 'left' }}>
+            <div>Tablero Distribuido</div>
+            <span className="tab-sub">Persistencia & Balanceo Redis</span>
+          </div>
         </button>
         <button
           className={`tab-button ${activeTab === 'chaos' ? 'active' : ''}`}
           onClick={() => setActiveTab('chaos')}
+          title="Pruebas de estrés, resiliencia, latencia y balanceo upstream"
         >
-          <span>⚡</span> Laboratorio de Caos y Métricas
+          <span>⚡</span>
+          <div style={{ textAlign: 'left' }}>
+            <div>Laboratorio de Caos y Métricas</div>
+            <span className="tab-sub">Resiliencia, OOM & Carga</span>
+          </div>
         </button>
       </nav>
 
       {/* Main Tab Views */}
       <main className="tab-content">
         {activeTab === 'board' ? (
-          <TaskBoard
-            onLogEvent={addLog}
-            frontendInfo={frontendInfo}
-            onRefreshFrontend={fetchFrontendInfo}
-          />
+          <TaskBoard onLogEvent={addLog} />
         ) : (
           <ChaosLab
             serverInfo={serverInfo}

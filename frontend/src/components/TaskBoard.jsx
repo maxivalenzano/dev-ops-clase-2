@@ -41,40 +41,15 @@ export function getNodeStyle(nodeName) {
   };
 }
 
-export default function TaskBoard({ onLogEvent, frontendInfo, onRefreshFrontend }) {
+export default function TaskBoard({ onLogEvent }) {
   const [tasks, setTasks] = useState([]);
   const [servedByNode, setServedByNode] = useState(null);
-  const [currentFrontendNode, setCurrentFrontendNode] = useState(frontendInfo?.instance || null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [errorMessage, setErrorMessage] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
-
-  useEffect(() => {
-    if (frontendInfo?.instance) {
-      setCurrentFrontendNode(frontendInfo.instance);
-    }
-  }, [frontendInfo]);
-
-  const fetchFrontendInfo = async () => {
-    if (onRefreshFrontend) {
-      const data = await onRefreshFrontend();
-      if (data?.instance) setCurrentFrontendNode(data.instance);
-      return data;
-    }
-    try {
-      const res = await fetch('/frontend-info');
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentFrontendNode(data.instance);
-        return data;
-      }
-    } catch {
-      // ignore
-    }
-  };
 
   const fetchTasks = async () => {
     setIsLoading(true);
@@ -121,15 +96,8 @@ export default function TaskBoard({ onLogEvent, frontendInfo, onRefreshFrontend 
     }
   };
 
-  const handleRefreshAll = async () => {
-    await Promise.all([fetchTasks(), fetchFrontendInfo()]);
-  };
-
   useEffect(() => {
     fetchTasks();
-    if (!frontendInfo?.instance) {
-      fetchFrontendInfo();
-    }
   }, []);
 
   const handleCreateTask = async (e) => {
@@ -256,127 +224,128 @@ export default function TaskBoard({ onLogEvent, frontendInfo, onRefreshFrontend 
   const completedCount = tasks.filter((t) => t.isCompleted).length;
   const pendingCount = tasks.length - completedCount;
   const servedStyle = getNodeStyle(servedByNode);
-  const frontendStyle = getNodeStyle(currentFrontendNode);
 
   return (
     <div className="taskboard-container">
-      {/* Overview & Live Read Node Signature Banner */}
+      {/* Banner de Información de Arquitectura y Firmas de Nodo */}
       <div className="card taskboard-header-card">
         <div className="taskboard-header-top">
           <div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <span>📋</span> Tablero Distribuido sobre Redis
+              <span>📋</span> Tablero Distribuido con Persistencia Redis
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-              Persistencia centralizada en Redis con balanceo de carga y estampado de firmas por nodo en Frontend y Backend.
+            <p className="card-desc" style={{ marginTop: '0.35rem' }}>
+              Demostración de <strong>persistencia centralizada en memoria</strong> y <strong>balanceo de carga</strong>. Cada solicitud es distribuida por Nginx hacia los nodos backend disponibles y estampada con la firma inmutable de la instancia receptora.
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {/* Frontend Tier Badge */}
-            <div className="read-signature-badge" style={{ backgroundColor: frontendStyle.bg, borderColor: frontendStyle.border }}>
-              <span className="badge-dot" style={{ backgroundColor: frontendStyle.text }} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Frontend SPA:</span>
-              <strong className="mono" style={{ color: frontendStyle.text, fontSize: '0.85rem' }}>
-                {currentFrontendNode || 'Cargando...'}
-              </strong>
-            </div>
+            {/* Indicador específico de qué réplica backend atendió esta consulta */}
+            {servedByNode && (
+              <div
+                className="read-signature-badge"
+                style={{ backgroundColor: servedStyle.bg, borderColor: servedStyle.border }}
+                title="Instancia backend específica que atendió esta lectura de Redis (Nginx balancea cada consulta)"
+              >
+                <span className="badge-dot" style={{ backgroundColor: servedStyle.text }} />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Consulta servida por:</span>
+                <strong className="mono" style={{ color: servedStyle.text, fontSize: '0.85rem' }}>
+                  {servedByNode}
+                </strong>
+              </div>
+            )}
 
-            {/* Backend Tier Badge */}
-            <div className="read-signature-badge" style={{ backgroundColor: servedStyle.bg, borderColor: servedStyle.border }}>
-              <span className="badge-dot" style={{ backgroundColor: servedStyle.text }} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Backend API:</span>
-              <strong className="mono" style={{ color: servedStyle.text, fontSize: '0.85rem' }}>
-                {servedByNode || 'Esperando lectura...'}
-              </strong>
-            </div>
-
-            <button onClick={handleRefreshAll} disabled={isLoading} style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
-              {isLoading ? '⏳ Actualizando...' : '🔄 Recargar'}
+            <button
+              onClick={fetchTasks}
+              disabled={isLoading}
+              style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
+              title="Re-consultar tareas en Redis"
+            >
+              {isLoading ? '⏳ Sincronizando...' : '🔄 Recargar Tareas'}
             </button>
           </div>
         </div>
 
-        {/* Mini stats counters */}
+        {/* Contadores de Estado de Tareas */}
         <div className="taskboard-stats-row">
           <div className="task-stat-item">
-            <span className="task-stat-label">Total en Redis</span>
+            <span className="task-stat-label">Almacenadas en Redis</span>
             <span className="task-stat-num mono">{totalCount}</span>
           </div>
           <div className="task-stat-item">
-            <span className="task-stat-label">Pendientes</span>
+            <span className="task-stat-label">Pendientes por Procesar</span>
             <span className="task-stat-num mono" style={{ color: 'var(--accent-amber)' }}>{pendingCount}</span>
           </div>
           <div className="task-stat-item">
-            <span className="task-stat-label">Completadas</span>
+            <span className="task-stat-label">Completadas con Éxito</span>
             <span className="task-stat-num mono" style={{ color: 'var(--accent-green)' }}>{completedCount}</span>
           </div>
         </div>
       </div>
 
-      {/* Error alert if backend is unreachable */}
+      {/* Alerta de Error de Conexión */}
       {errorMessage && (
         <div className="taskboard-alert warning">
           <span>⚠️ {errorMessage}</span>
           <button onClick={fetchTasks} style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', marginLeft: 'auto' }}>
-            Reintentar
+            Reintentar Conexión
           </button>
         </div>
       )}
 
-      {/* Form to add a new task */}
+      {/* Formulario de Creación de Tarea */}
       <div className="card task-create-card">
         <form onSubmit={handleCreateTask} className="task-create-form">
           <input
             type="text"
             className="task-input"
-            placeholder="Escribe una tarea para el cluster (ej. 'Configurar réplica en Azure VM')..."
+            placeholder="Escribe una tarea para el cluster (ej. 'Verificar réplicas de ChaosNet en Azure VM')..."
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             disabled={isSubmitting}
           />
           <button type="submit" className="primary" disabled={isSubmitting || !newTitle.trim()}>
-            {isSubmitting ? '⏳ Guardando...' : '➕ Guardar en Cluster'}
+            {isSubmitting ? '⏳ Guardando en Redis...' : '➕ Guardar en Cluster'}
           </button>
         </form>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          💡 Cada tarea se guarda en Redis y lleva el sello inmutable del nodo que atendió el <code className="mono">POST</code> (<code className="mono">createdByNode</code>).
+          💡 Cada tarea se persiste en Redis y queda sellada con el nodo backend que atendió el <code className="mono">POST</code> (<code className="mono">createdByNode</code>). En ChaosNet Lab, los datos se preservan ante caídas de réplicas.
         </p>
       </div>
 
-      {/* Task List Controls & Filters */}
+      {/* Filtros de Lista de Tareas */}
       <div className="task-list-header">
         <div className="task-filter-group">
           <button
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            Todas ({tasks.length})
+            📑 Todas ({tasks.length})
           </button>
           <button
             className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
             onClick={() => setFilter('pending')}
           >
-            Pendientes ({pendingCount})
+            ⏳ Pendientes ({pendingCount})
           </button>
           <button
             className={`filter-btn ${filter === 'completed' ? 'active' : ''}`}
             onClick={() => setFilter('completed')}
           >
-            Completadas ({completedCount})
+            ✅ Completadas ({completedCount})
           </button>
         </div>
       </div>
 
-      {/* Task Items Grid / List */}
+      {/* Grilla / Lista de Tareas */}
       {filteredTasks.length === 0 ? (
         <div className="card empty-tasks-card">
           <div className="empty-icon">📭</div>
-          <h3>No hay tareas en esta vista</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          <h3 className="empty-title">No hay tareas en esta vista</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '480px' }}>
             {tasks.length === 0
-              ? 'El almacén de Redis está vacío. Agrega la primera tarea arriba para comprobar qué nodo backend la sella.'
-              : 'No hay tareas que coincidan con el filtro seleccionado.'}
+              ? 'El almacén en Redis no contiene registros aún. Agrega la primera tarea arriba para comprobar qué nodo backend procesa la escritura y observar la firma generada.'
+              : 'No existen tareas que coincidan con el filtro seleccionado.'}
           </p>
         </div>
       ) : (
