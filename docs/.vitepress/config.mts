@@ -92,6 +92,7 @@ export default defineConfig({
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
             { text: '2026-09-14: Troubleshooting SonarQube Cloud & QG', link: '/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate' },
+            { text: '2026-09-14: Cluster Frontend 3 Réplicas HA', link: '/bitacora/2026-09-14-cluster-frontend-3-replicas-alta-disponibilidad' },
             { text: '2026-09-14: Refactorización Pipeline: 4 Stages DevSecOps', link: '/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops' },
             { text: '2026-09-14: TP 1 - Etapa 5: SAST, SonarCloud & Badges', link: '/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud' },
             { text: '2026-09-14: Configuración Dominio & DNS (IONOS)', link: '/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx' },
