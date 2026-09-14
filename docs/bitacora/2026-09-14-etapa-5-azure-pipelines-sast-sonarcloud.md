@@ -86,6 +86,12 @@ Se reemplazaron los badges estáticos por badges dinámicos con consultas direct
 - **Vulnerabilities**: Contador de vulnerabilidades abiertas.
 - **Coverage**: Porcentaje de líneas cubiertas por los 42 tests unitarios.
 
+### 5. Automatización de Changelog para GitHub Releases
+Se implementó un generador dinámico de notas de cambios en el Stage 3 (`CD`):
+- Extrae el historial de commits relevantes entre el último tag y la versión actual (`git log ${LOG_RANGE}`).
+- Inyecta la lista formateada en Markdown con enlaces directos a los commits dentro del cuerpo del GitHub Release oficial.
+- Creación de `CHANGELOG.md` en la raíz del repositorio siguiendo la convención *Keep a Changelog* y *SemVer*.
+
 ---
 
 ## ✅ Resultados y Criterios de Aceptación

@@ -2,6 +2,7 @@
 
 [![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://68.211.137.116)
 [![GitHub Release](https://img.shields.io/github/v/release/maxivalenzano/dev-ops-clase-2?color=blue&logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/releases)
+[![Changelog](https://img.shields.io/badge/Changelog-Keep%20a%20Changelog-orange?logo=git&logoColor=white)](CHANGELOG.md)
 [![Azure Pipelines Build](https://dev.azure.com/maxivalenzano/DevOps/_apis/build/status/maxivalenzano.dev-ops-clase-2?branchName=devel)](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
