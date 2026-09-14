@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Refactorización de Pipeline CI/CD: Arquitectura Desacoplada en 4 Stages**](/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops)
+  - Desacoplamiento del CI monolítico en dos etapas independientes: Quality Gate (Tests + SAST) y Packaging OCI.
+  - Implementación de principio Fail-Fast: bloqueo inmediato de construcción de contenedores ante fallos de calidad o seguridad.
+  - Jobs especializados para Backend (.NET 10 xUnit + SonarCloud) y Frontend (React 18 Vite + Trivy Scanner).
+  - Habilitación de reintentos granulares (*Rerun failed jobs*) sin sobrecosto de re-ejecución total.
+
 - [**2026-09-14: Configuración de Dominio Personalizado (IONOS DNS), IP Estática en Azure y Nginx Gateway**](/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx)
   - Vinculación del dominio `devops-maxivalenzano.com` a la infraestructura en Azure VM (`68.211.137.116`).
   - Configuración de zona DNS en IONOS con registros `A` (@) y `CNAME` (www).

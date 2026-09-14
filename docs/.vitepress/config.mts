@@ -91,6 +91,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-09-14: Refactorización Pipeline: 4 Stages DevSecOps', link: '/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops' },
             { text: '2026-09-14: TP 1 - Etapa 5: SAST, SonarCloud & Badges', link: '/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud' },
             { text: '2026-09-14: Configuración Dominio & DNS (IONOS)', link: '/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx' },
             { text: '2026-09-14: Gobernanza en Azure DevOps & Work Items', link: '/bitacora/2026-09-14-configuracion-azure-devops-gobernanza-workitems' },
