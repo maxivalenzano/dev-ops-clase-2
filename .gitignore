@@ -17,3 +17,6 @@ obj/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local planning and notes (not committed)
+PLAN_*.md
