@@ -145,19 +145,34 @@ stages:
               version: '10.x'
             continueOnError: true # No bloquea si el agente de Azure aún no tiene el feed oficial
 
-          # 1. Validación de compilación de Backend
+          # 1. Preparar Análisis de SonarQube Cloud (SAST)
+          - task: SonarCloudPrepare@3
+            displayName: 'Preparar Análisis SonarQube Cloud'
+            inputs:
+              SonarCloud: 'SonarCloud'
+              organization: 'maxivalenzano'
+              scannerMode: 'MSBuild'
+              projectKey: 'maxivalenzano_DevOps'
+              projectName: 'DevOps'
+              extraProperties: |
+                sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.opencover.xml,$(Build.SourcesDirectory)/**/coverage.opencover.xml
+                sonar.cs.vstest.reportsPaths=$(Agent.TempDirectory)/**/*.trx
+                sonar.exclusions=**/obj/**,**/bin/**,**/dist/**,**/node_modules/**
+
+          # 2. Validación de compilación de Backend (.NET 10)
           - bash: |
               echo "==> Verificando compilación de Backend .NET 10..."
               dotnet build backend/Backend.csproj -c Release
             displayName: 'Validar Backend (.NET 10)'
 
-          # 2. Ejecución de Pruebas Unitarias (.NET 10)
+          # 3. Ejecución de Pruebas Unitarias (.NET 10 con Cobertura)
           - bash: |
               echo "==> Ejecutando Pruebas Unitarias en .NET 10..."
               dotnet test tests/Backend.Tests/Backend.Tests.csproj \
                 --configuration Release \
                 --logger "trx;LogFileName=test_results.trx" \
-                --collect:"XPlat Code Coverage"
+                --collect:"XPlat Code Coverage" \
+                -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover,cobertura
             displayName: 'Ejecutar Tests Unitarios (.NET 10)'
 
           - task: PublishTestResults@2
@@ -174,7 +189,24 @@ stages:
               summaryFileLocation: '**/coverage.cobertura.xml'
             condition: succeededOrFailed()
 
-          # 3. Validación de compilación de Frontend
+          # 4. Ejecutar Análisis y Quality Gate en SonarQube Cloud
+          - task: SonarCloudAnalyze@3
+            displayName: 'Ejecutar Análisis SAST en SonarQube Cloud'
+
+          - task: SonarCloudPublish@3
+            displayName: 'Evaluar y Publicar Quality Gate SonarQube Cloud'
+            inputs:
+              pollingTimeoutSec: '300'
+
+          # 5. Análisis SAST Complementario de Contenedores y Dependencias (Trivy)
+          - bash: |
+              echo "==> Ejecutando auditoría de seguridad SAST con Trivy..."
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              trivy fs --severity HIGH,CRITICAL --exit-code 0 .
+            displayName: 'Auditoría SAST (Trivy Security Scanner)'
+            continueOnError: true
+
+          # 6. Validación de compilación de Frontend
           - bash: |
               echo "==> Verificando dependencias y build de Frontend React..."
               cd frontend

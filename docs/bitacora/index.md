@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: TP 1 - Etapa 5: CI con Análisis Estático de Seguridad (SAST), SonarQube Cloud y Badges**](/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud)
+  - Integración de SonarQube Cloud SAST para escaneo estático de vulnerabilidades, security hotspots y code smells en .NET 10.
+  - Evaluación y publicación automatizada del Quality Gate oficial en Azure Pipelines con compuerta de paso de calidad.
+  - Generación dual de reportes de cobertura (Coverlet OpenCover + Cobertura) para dashboards de SonarCloud y Azure DevOps.
+  - Auditoría complementaria de dependencias y Containerfiles mediante Trivy Security Scanner.
+  - Badges dinámicos oficiales de Azure Pipelines y SonarCloud incorporados en `README.md`.
 - [**2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias Backend (.NET 10 con xUnit, Moq y CI Gatekeeper)**](/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit)
   - Creación del proyecto `tests/Backend.Tests` en .NET 10 con xUnit, Moq y Microsoft.AspNetCore.Mvc.Testing.
   - Separación limpia en modelos (`TaskItem`) y capa de servicios (`ITaskService`, `TaskService`) con fallback resiliente.

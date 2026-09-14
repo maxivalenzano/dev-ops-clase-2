@@ -2,8 +2,12 @@
 
 [![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://68.211.137.116)
 [![GitHub Release](https://img.shields.io/github/v/release/maxivalenzano/dev-ops-clase-2?color=blue&logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/releases)
+[![Azure Pipelines Build](https://dev.azure.com/maxivalenzano/DevOps/_apis/build/status/maxivalenzano.dev-ops-clase-2?branchName=devel)](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=coverage)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
 [![GitHub Packages](https://img.shields.io/badge/GitHub-Packages%20(GHCR)-black?logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend)
-[![Azure Pipelines](https://img.shields.io/badge/Azure%20Pipelines-CI%2FCD%20Multi--Stage-0078D7?logo=azure-devops&logoColor=white)](https://dev.azure.com/)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](backend/)
 [![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/)
 [![Nginx Gateway](https://img.shields.io/badge/Nginx-Reverse%20Proxy-009639?logo=nginx&logoColor=white)](nginx/)
@@ -125,6 +129,24 @@ Open your browser at **`http://localhost:8080`** to access the interactive dashb
 - **Test**:
   - Click **Toggle Health (UP/DOWN)** on the active node.
   - Fire requests: Nginx detects the `500` status and fails over to the healthy replica.
+
+---
+
+## 🛡️ CI/CD Quality Gate & SAST (DevSecOps)
+
+El pipeline automatizado en Azure DevOps implementa prácticas estrictas de **DevSecOps** antes de cualquier publicación o despliegue continuo:
+
+1. **Pruebas Unitarias Automatizadas (.NET 10 & xUnit)**:
+   - Ejecución de 42 pruebas unitarias cubriendo modelos, servicios Redis con fallback en memoria, endpoints de salud y escenarios de caos.
+   - Publicación nativa de resultados VSTest (`test_results.trx`) y cobertura en formato Cobertura y OpenCover.
+2. **Análisis Estático de Seguridad de Código (SAST con SonarQube Cloud)**:
+   - Integración directa con el escáner oficial de SonarQube Cloud para .NET (`MSBuild / dotnet`).
+   - Detección estática de vulnerabilidades, *Security Hotspots*, *Code Smells* y bugs.
+   - Evaluación automatizada del **Quality Gate** que certifica la salud del código antes del empaquetado OCI.
+3. **Auditoría de Vulnerabilidades en Dependencias y Contenedores (Trivy)**:
+   - Escaneo SAST complementario mediante **Trivy** para detectar CVEs en dependencias NuGet/npm y malas prácticas en los `Containerfile`.
+4. **Gobernanza y Badges Oficiales**:
+   - Métricas y estados en tiempo real visibles en la cabecera del repositorio (Azure Pipelines Build, SonarCloud Quality Gate, Security Rating, Vulnerabilities y Coverage).
 
 ---
 
