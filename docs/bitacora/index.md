@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Implementación de Portainer CE para Gestión Visual de Contenedores, Exposición de Puerto 9000 en Azure NSG y Troubleshooting de Inicialización**](/bitacora/2026-09-14-implementacion-portainer-ce-gestion-visual-azure)
+  - Despliegue de Portainer Community Edition (CE) sobre Azure VM (`Standard_B2als_v2`) y orquestación GitOps en `compose.yaml`.
+  - Apertura del puerto 9000 en el Network Security Group (NSG) de Azure para acceso público directo vía `http://devops-maxivalenzano.com:9000/`.
+  - Resolución de incidentes y políticas de seguridad: timeout de 5 minutos, extracción de `setup_token` en logs del contenedor, validación de contraseñas de 12+ caracteres y descarte de Edge Compute.
+  - Habilitación de panel visual con 10 contenedores en tiempo real y guía para la defensa de Alta Disponibilidad y Chaos Engineering ante la cátedra.
+
 - [**2026-09-14: Troubleshooting de Quality Gate: SonarQube Cloud API 403, Gobernanza de Branches y Migración v4**](/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate)
   - Resolución del error 403 Forbidden en `SonarCloudPublish` por token de análisis sin permisos de lectura (`Browse`).
   - Diagnóstico de limitaciones del plan Free de SonarQube Cloud y configuración de visibilidad pública del proyecto.

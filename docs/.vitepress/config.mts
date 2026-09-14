@@ -91,6 +91,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-09-14: Portainer CE & Azure NSG Puerto 9000', link: '/bitacora/2026-09-14-implementacion-portainer-ce-gestion-visual-azure' },
             { text: '2026-09-14: Troubleshooting SonarQube Cloud & QG', link: '/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate' },
             { text: '2026-09-14: Cluster Frontend 3 Réplicas HA', link: '/bitacora/2026-09-14-cluster-frontend-3-replicas-alta-disponibilidad' },
             { text: '2026-09-14: Refactorización Pipeline: 4 Stages DevSecOps', link: '/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops' },
