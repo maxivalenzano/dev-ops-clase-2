@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Implementación Etapa 2 - Tablero Distribuido (TaskBoard) con Firmas de Nodo sobre Redis**](/bitacora/2026-09-13-etapa-2-frontend-tablero-distribuido)
+  - Desarrollo del componente React 18 `TaskBoard` en worktree aislado basado en el contrato `/api/tasks`.
+  - Badges coloreados por nodo para firma de creación (`createdByNode`) y firma de lectura (`servedByNode`).
+  - Navegación por pestañas para convivencia entre el Tablero y el Laboratorio de Caos y Métricas (`ChaosLab`).
+  - Modularización del frontend y validación con `npm run build` en Vite.
+
 - [**2026-09-13: Gobernanza en CD con Quality Gates, GitHub Deployments y Troubleshooting YAML**](/bitacora/2026-09-13-gobernanza-deployments-quality-gate)
   - Paso de Continuous Deployment a Continuous Delivery con compuertas de calidad manuales (Approvals).
   - Configuración de `devops-vm-env` y resolución de deadlocks con *"Allow approvers to approve their own runs"*.
