@@ -7,7 +7,7 @@ COPY Backend.csproj ./
 RUN dotnet restore Backend.csproj
 
 # Copy source code and build/publish
-COPY Program.cs ./
+COPY . ./
 RUN dotnet publish Backend.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 # Runtime stage
