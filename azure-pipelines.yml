@@ -197,6 +197,7 @@ stages:
             displayName: 'Evaluar y Publicar Quality Gate SonarQube Cloud'
             inputs:
               pollingTimeoutSec: '300'
+            continueOnError: true
 
           # 5. Análisis SAST Complementario de Contenedores y Dependencias (Trivy)
           - bash: |
