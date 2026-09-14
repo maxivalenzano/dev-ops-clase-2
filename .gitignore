@@ -8,6 +8,8 @@ dist/
 # .NET / Backend
 bin/
 obj/
+TestResults/
+*.trx
 *.user
 *.userosscache
 *.suo

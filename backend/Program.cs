@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
+using Backend.Models;
+using Backend.Services;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,11 +13,22 @@ var portEnv = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portEnv, out var parsedPort) ? parsedPort : 3000;
 var instanceName = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
 
-var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION") ?? "localhost:6379";
-var redisOptions = ConfigurationOptions.Parse(redisConnection);
-redisOptions.AbortOnConnectFail = false;
-redisOptions.ConnectTimeout = 5000;
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
+var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION");
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    try
+    {
+        var redisOptions = ConfigurationOptions.Parse(redisConnection);
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.ConnectTimeout = 2000;
+        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Warning] Could not configure Redis options for '{redisConnection}': {ex.Message}");
+    }
+}
+builder.Services.AddSingleton<ITaskService, TaskService>();
 
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
@@ -270,37 +283,22 @@ api.MapPost("/health/toggle", () =>
 var tasksApi = api.MapGroup("/tasks");
 
 // GET /api/tasks
-tasksApi.MapGet("/", async (IConnectionMultiplexer redis) =>
+tasksApi.MapGet("/", async (ITaskService taskService) =>
 {
     try
     {
-        var db = redis.GetDatabase();
-        var entries = await db.HashGetAllAsync("tasks");
-        var taskList = new List<TaskItem>();
-
-        foreach (var entry in entries)
-        {
-            if (!entry.Value.IsNullOrEmpty)
-            {
-                var item = JsonSerializer.Deserialize<TaskItem>(entry.Value.ToString());
-                if (item is not null)
-                {
-                    taskList.Add(item);
-                }
-            }
-        }
-
-        var sortedTasks = taskList.OrderBy(t => t.CreatedAt).ToList();
+        var tasks = await taskService.GetAllTasksAsync();
+        var taskList = tasks.ToList();
 
         return Results.Ok(new TasksResponse(
             ServedByNode: instanceName,
-            TotalCount: sortedTasks.Count,
-            Tasks: sortedTasks
+            TotalCount: taskList.Count,
+            Tasks: taskList
         ));
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks from Redis: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks: {ex.Message}");
         return Results.Json(new
         {
             error = "Failed to communicate with Redis",
@@ -311,57 +309,42 @@ tasksApi.MapGet("/", async (IConnectionMultiplexer redis) =>
 });
 
 // GET /api/tasks/{id}
-tasksApi.MapGet("/{id}", async (string id, IConnectionMultiplexer redis) =>
+tasksApi.MapGet("/{id}", async (string id, ITaskService taskService) =>
 {
     try
     {
-        var db = redis.GetDatabase();
-        var json = await db.HashGetAsync("tasks", id);
-        if (json.IsNullOrEmpty)
+        var task = await taskService.GetTaskByIdAsync(id);
+        if (task is null)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
         }
 
-        var task = JsonSerializer.Deserialize<TaskItem>(json.ToString());
-        return task is not null
-            ? Results.Ok(task)
-            : Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
+        return Results.Ok(task);
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Redis query failed: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Query failed: {ex.Message}");
         return Results.Json(new { error = "Redis query failed", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // POST /api/tasks
-tasksApi.MapPost("/", async (CreateTaskRequest? body, IConnectionMultiplexer redis) =>
+tasksApi.MapPost("/", async (CreateTaskRequest? body, ITaskService taskService) =>
 {
     if (string.IsNullOrWhiteSpace(body?.Title))
     {
         return Results.BadRequest(new { error = "Task title is required" });
     }
 
-    var task = new TaskItem(
-        Id: Guid.NewGuid().ToString(),
-        Title: body.Title.Trim(),
-        IsCompleted: false,
-        CreatedByNode: instanceName,
-        CreatedAt: DateTime.UtcNow
-    );
-
     try
     {
-        var db = redis.GetDatabase();
-        var json = JsonSerializer.Serialize(task);
-        await db.HashSetAsync("tasks", task.Id, json);
-
+        var task = await taskService.CreateTaskAsync(body.Title, instanceName);
         Console.WriteLine($"[{instanceName}] Created task '{task.Id}' (Title: {task.Title})");
         return Results.Created($"/api/tasks/{task.Id}", task);
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to save task to Redis: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to save task: {ex.Message}");
         return Results.Json(new
         {
             error = "Failed to save task to Redis",
@@ -372,43 +355,32 @@ tasksApi.MapPost("/", async (CreateTaskRequest? body, IConnectionMultiplexer red
 });
 
 // PUT /api/tasks/{id}/toggle
-tasksApi.MapPut("/{id}/toggle", async (string id, IConnectionMultiplexer redis) =>
+tasksApi.MapPut("/{id}/toggle", async (string id, ITaskService taskService) =>
 {
     try
     {
-        var db = redis.GetDatabase();
-        var json = await db.HashGetAsync("tasks", id);
-        if (json.IsNullOrEmpty)
+        var updatedTask = await taskService.ToggleTaskAsync(id);
+        if (updatedTask is null)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
         }
-
-        var existingTask = JsonSerializer.Deserialize<TaskItem>(json.ToString());
-        if (existingTask is null)
-        {
-            return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
-        }
-
-        var updatedTask = existingTask with { IsCompleted = !existingTask.IsCompleted };
-        await db.HashSetAsync("tasks", id, JsonSerializer.Serialize(updatedTask));
 
         Console.WriteLine($"[{instanceName}] Toggled task '{id}' to IsCompleted={updatedTask.IsCompleted}");
         return Results.Ok(updatedTask);
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task in Redis: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task: {ex.Message}");
         return Results.Json(new { error = "Failed to toggle task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // DELETE /api/tasks/{id}
-tasksApi.MapDelete("/{id}", async (string id, IConnectionMultiplexer redis) =>
+tasksApi.MapDelete("/{id}", async (string id, ITaskService taskService) =>
 {
     try
     {
-        var db = redis.GetDatabase();
-        var deleted = await db.HashDeleteAsync("tasks", id);
+        var deleted = await taskService.DeleteTaskAsync(id);
         if (!deleted)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
@@ -419,7 +391,7 @@ tasksApi.MapDelete("/{id}", async (string id, IConnectionMultiplexer redis) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to delete task in Redis: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to delete task: {ex.Message}");
         return Results.Json(new { error = "Failed to delete task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
@@ -429,20 +401,4 @@ app.Run();
 public record CpuStressRequest([property: JsonPropertyName("duration")] int? Duration);
 public record MemoryStressRequest([property: JsonPropertyName("mb")] int? Mb);
 
-public record TaskItem(
-    [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("title")] string Title,
-    [property: JsonPropertyName("isCompleted")] bool IsCompleted,
-    [property: JsonPropertyName("createdByNode")] string CreatedByNode,
-    [property: JsonPropertyName("createdAt")] DateTime CreatedAt
-);
-
-public record CreateTaskRequest(
-    [property: JsonPropertyName("title")] string? Title
-);
-
-public record TasksResponse(
-    [property: JsonPropertyName("servedByNode")] string ServedByNode,
-    [property: JsonPropertyName("totalCount")] int TotalCount,
-    [property: JsonPropertyName("tasks")] IEnumerable<TaskItem> Tasks
-);
+public partial class Program { }

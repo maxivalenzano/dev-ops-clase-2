@@ -151,7 +151,21 @@ stages:
               dotnet build backend/Backend.csproj -c Release
             displayName: 'Validar Backend (.NET 10)'
 
-          # 2. Validación de compilación de Frontend
+          # 2. Ejecución de Pruebas Unitarias (.NET 10)
+          - bash: |
+              echo "==> Ejecutando Pruebas Unitarias en .NET 10..."
+              dotnet test tests/Backend.Tests/Backend.Tests.csproj --configuration Release --logger "trx;LogFileName=test_results.trx" /p:CollectCoverage=true
+            displayName: 'Ejecutar Tests Unitarios (.NET 10)'
+
+          - task: PublishTestResults@2
+            displayName: 'Publicar Resultados de Tests'
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/test_results.trx'
+              failTaskOnFailedTests: true
+            condition: succeededOrFailed()
+
+          # 3. Validación de compilación de Frontend
           - bash: |
               echo "==> Verificando dependencias y build de Frontend React..."
               cd frontend
@@ -159,14 +173,14 @@ stages:
               npm run build
             displayName: 'Validar Frontend (React 18 / Vite)'
 
-          # 3. Autenticación contra Azure Container Registry
+          # 4. Autenticación contra Azure Container Registry
           - task: Docker@2
             displayName: 'Docker Login a ACR'
             inputs:
               command: 'login'
               containerRegistry: $(acrServiceConnection)
 
-          # 4. Construcción y publicación de Backend a ACR y GHCR
+          # 5. Construcción y publicación de Backend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Backend con tag: $(SEMVER_TAG)"
               docker build \
@@ -195,7 +209,7 @@ stages:
             env:
               GITHUB_PAT: $(GITHUB_PAT)
 
-          # 5. Construcción y publicación de Frontend a ACR y GHCR
+          # 6. Construcción y publicación de Frontend a ACR y GHCR
           - bash: |
               echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
               docker build \
