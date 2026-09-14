@@ -203,18 +203,20 @@ stages:
               docker push $(acrLoginServer)/backend:$(SEMVER_TAG)
               docker push $(acrLoginServer)/backend:latest
 
-              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR)
+              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR) de forma no bloqueante
               if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
                 echo "==> Autenticando y publicando imagen Backend en GitHub Packages (GHCR)..."
-                echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin
-                docker tag $(acrLoginServer)/backend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
-                docker tag $(acrLoginServer)/backend:latest ghcr.io/maxivalenzano/dev-ops-backend:latest
-                docker push ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
-                docker push ghcr.io/maxivalenzano/dev-ops-backend:latest
-                echo "==> Backend publicado en GHCR exitosamente."
+                if echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin 2>/dev/null; then
+                  docker tag $(acrLoginServer)/backend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
+                  docker tag $(acrLoginServer)/backend:latest ghcr.io/maxivalenzano/dev-ops-backend:latest
+                  docker push ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG) || echo "==> [Aviso] No se pudo pushear tag semver a GHCR."
+                  docker push ghcr.io/maxivalenzano/dev-ops-backend:latest || echo "==> [Aviso] No se pudo pushear tag latest a GHCR."
+                  echo "==> Sincronización de Backend con GHCR finalizada."
+                else
+                  echo "==> [Aviso] No se pudo autenticar contra ghcr.io (revisar GITHUB_PAT)."
+                fi
               fi
             displayName: 'Build & Push Backend OCI (ACR + GHCR)'
-            continueOnError: true
             env:
               GITHUB_PAT: $(GITHUB_PAT)
 
@@ -233,18 +235,20 @@ stages:
               docker push $(acrLoginServer)/frontend:$(SEMVER_TAG)
               docker push $(acrLoginServer)/frontend:latest
 
-              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR)
+              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR) de forma no bloqueante
               if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
                 echo "==> Autenticando y publicando imagen Frontend en GitHub Packages (GHCR)..."
-                echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin
-                docker tag $(acrLoginServer)/frontend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
-                docker tag $(acrLoginServer)/frontend:latest ghcr.io/maxivalenzano/dev-ops-frontend:latest
-                docker push ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
-                docker push ghcr.io/maxivalenzano/dev-ops-frontend:latest
-                echo "==> Frontend publicado en GHCR exitosamente."
+                if echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin 2>/dev/null; then
+                  docker tag $(acrLoginServer)/frontend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
+                  docker tag $(acrLoginServer)/frontend:latest ghcr.io/maxivalenzano/dev-ops-frontend:latest
+                  docker push ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG) || echo "==> [Aviso] No se pudo pushear tag semver frontend a GHCR."
+                  docker push ghcr.io/maxivalenzano/dev-ops-frontend:latest || echo "==> [Aviso] No se pudo pushear tag latest frontend a GHCR."
+                  echo "==> Sincronización de Frontend con GHCR finalizada."
+                else
+                  echo "==> [Aviso] No se pudo autenticar contra ghcr.io (revisar GITHUB_PAT)."
+                fi
               fi
             displayName: 'Build & Push Frontend OCI (ACR + GHCR)'
-            continueOnError: true
             env:
               GITHUB_PAT: $(GITHUB_PAT)
 
@@ -256,6 +260,7 @@ stages:
     dependsOn:
       - Versioning
       - CI
+    condition: and(succeeded(), in(variables['Build.SourceBranch'], 'refs/heads/main', 'refs/heads/devel', 'refs/tags/v*'), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
