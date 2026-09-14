@@ -6,6 +6,11 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: TP 1 - Etapa 4: Pruebas Unitarias Backend (.NET 10 con xUnit, Moq y CI Gatekeeper)**](/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit)
+  - Creación del proyecto `tests/Backend.Tests` en .NET 10 con xUnit, Moq y Microsoft.AspNetCore.Mvc.Testing.
+  - Separación limpia en modelos (`TaskItem`) y capa de servicios (`ITaskService`, `TaskService`) con fallback resiliente.
+  - Cobertura total de modelos, lógica con mocks de Redis (`IDatabase`), endpoints de salud y ciclo completo CRUD HTTP (24 tests en verde).
+  - Integración en `azure-pipelines.yml` con `PublishTestResults@2` y `failTaskOnFailedTests: true` como Quality Gate bloqueante.
 - [**2026-09-13: Implementación Etapa 2 - Tablero Distribuido (TaskBoard) con Firmas de Nodo sobre Redis**](/bitacora/2026-09-13-etapa-2-frontend-tablero-distribuido)
   - Desarrollo del componente React 18 `TaskBoard` en worktree aislado basado en el contrato `/api/tasks`.
   - Badges coloreados por nodo para firma de creación (`createdByNode`) y firma de lectura (`servedByNode`).
