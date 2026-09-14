@@ -6,6 +6,13 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Pruebas Unitarias Automatizadas con xUnit en .NET 10 (Etapa 4)**](/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit)
+  - Creación del proyecto de pruebas `tests/Backend.Tests` en .NET 10 (`10.0.401`).
+  - Modelado del contrato `TaskItem` y servicio de persistencia `TaskService` con soporte dual Redis Hash y fallback en memoria.
+  - Aislamiento y mocking de Redis con `Moq` para pruebas deterministas y ultra-rápidas.
+  - Pruebas de integración HTTP de endpoints (`/health`, `/api/health/toggle`, `/api/tasks`) con `WebApplicationFactory`.
+  - Configuración de solución `devops.slnx` y validación de 21 tests al 100% en verde.
+
 - [**2026-09-13: Gobernanza en CD con Quality Gates, GitHub Deployments y Troubleshooting YAML**](/bitacora/2026-09-13-gobernanza-deployments-quality-gate)
   - Paso de Continuous Deployment a Continuous Delivery con compuertas de calidad manuales (Approvals).
   - Configuración de `devops-vm-env` y resolución de deadlocks con *"Allow approvers to approve their own runs"*.

@@ -91,6 +91,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-09-13: Pruebas Unitarias en .NET 10', link: '/bitacora/2026-09-13-pruebas-unitarias-dotnet-10-xunit' },
             { text: '2026-09-13: Gobernanza y Quality Gates en CD', link: '/bitacora/2026-09-13-gobernanza-deployments-quality-gate' },
             { text: '2026-09-13: Releases & Packages en GitHub', link: '/bitacora/2026-09-13-automatizacion-releases-packages-github' },
             { text: '2026-09-13: Troubleshooting DNS & 502', link: '/bitacora/2026-09-13-troubleshooting-dns-nginx-cd' },
