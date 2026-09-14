@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import TaskBoard from './components/TaskBoard';
+import ChaosLab from './components/ChaosLab';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('board');
   const [serverInfo, setServerInfo] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isRunningLoad, setIsRunningLoad] = useState(false);
@@ -145,6 +148,7 @@ export default function App() {
     setInstanceCounts({});
     setLogs([]);
   };
+
   return (
     <div className="container">
       {/* Header */}
@@ -167,7 +171,7 @@ export default function App() {
             </span>
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            React 18 + .NET Minimal API + Nginx Reverse Proxy
+            React 18 + .NET Minimal API + Redis + Nginx Reverse Proxy
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -184,168 +188,51 @@ export default function App() {
         </div>
       </header>
 
-      {/* Realtime Stats Bar */}
-      <div className="stats-grid">
-        <div className="stat-box">
-          <span className="stat-label">Total Requests</span>
-          <span className="stat-value mono" style={{ color: 'var(--accent-blue)' }}>{stats.total}</span>
-        </div>
-        <div className="stat-box">
-          <span className="stat-label">Success (2xx)</span>
-          <span className="stat-value mono" style={{ color: 'var(--accent-green)' }}>{stats.success}</span>
-        </div>
-        <div className="stat-box">
-          <span className="stat-label">Errors (5xx/4xx)</span>
-          <span className="stat-value mono" style={{ color: 'var(--accent-rose)' }}>{stats.errors}</span>
-        </div>
-        <div className="stat-box">
-          <span className="stat-label">Avg Latency</span>
-          <span className="stat-value mono" style={{ color: 'var(--accent-amber)' }}>{stats.avgLatency} ms</span>
-        </div>
-      </div>
+      {/* Navigation Tabs */}
+      <nav className="tabs-nav">
+        <button
+          className={`tab-button ${activeTab === 'board' ? 'active' : ''}`}
+          onClick={() => setActiveTab('board')}
+        >
+          <span>📋</span> Tablero Distribuido
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'chaos' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chaos')}
+        >
+          <span>⚡</span> Laboratorio de Caos y Métricas
+        </button>
+      </nav>
 
-      {/* Main Grid */}
-      <div className="grid">
-        {/* Load Balancer Distribution */}
-        <div className="card">
-          <div className="card-title">
-            <span>⚖️ Upstream Load Distribution</span>
-            <button onClick={handleResetStats} style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}>Clear</button>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Nginx distributes traffic across available backend instances:
-          </p>
-          <div className="dist-list">
-            {Object.keys(instanceCounts).length === 0 ? (
-              <p className="mono" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No requests recorded yet.</p>
-            ) : (
-              Object.entries(instanceCounts).map(([inst, count]) => {
-                const percentage = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
-                return (
-                  <div key={inst} className="dist-item">
-                    <div className="dist-header mono">
-                      <span><strong>{inst}</strong></span>
-                      <span>{count} reqs ({percentage}%)</span>
-                    </div>
-                    <div className="dist-bar-bg">
-                      <div className="dist-bar-fill" style={{ width: `${percentage}%` }} />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {serverInfo && (
-            <div style={{ marginTop: '0.5rem', background: 'var(--bg-card)', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.8rem' }}>
-              <div className="mono" style={{ color: 'var(--accent-cyan)', marginBottom: '0.25rem' }}>Active Target Info:</div>
-              <div className="mono">Host: <strong>{serverInfo.hostname}</strong> (PID {serverInfo.pid})</div>
-              <div className="mono">Port: <strong>{serverInfo.port}</strong> | Uptime: {serverInfo.uptimeSeconds}s</div>
-              <div className="mono">RSS Mem: <strong>{serverInfo.memory?.rssMB} MB</strong> (Buffers: {serverInfo.memory?.totalBuffersRetainedMB} MB)</div>
-            </div>
-          )}
-        </div>
-
-        {/* Load Testing Controls */}
-        <div className="card">
-          <div className="card-title">
-            <span>⚡ Concurrent Load Generator</span>
-          </div>
-          <div className="input-row">
-            <label style={{ flex: 1 }}>Requests:</label>
-            <select value={batchCount} onChange={(e) => setBatchCount(Number(e.target.value))}>
-              <option value={10}>10 requests</option>
-              <option value={50}>50 requests</option>
-              <option value={100}>100 requests</option>
-              <option value={250}>250 requests</option>
-            </select>
-          </div>
-          <div className="input-row">
-            <label style={{ flex: 1 }}>Concurrency:</label>
-            <select value={concurrency} onChange={(e) => setConcurrency(Number(e.target.value))}>
-              <option value={1}>1 (Sequential)</option>
-              <option value={5}>5 parallel</option>
-              <option value={10}>10 parallel</option>
-              <option value={20}>20 parallel</option>
-            </select>
-          </div>
-          <button className="primary" onClick={handleRunLoadTest} disabled={isRunningLoad}>
-            {isRunningLoad ? '⏳ Generating Load...' : '▶ Launch Load Test'}
-          </button>
-        </div>
-
-        {/* Chaos: Timeouts & Delays */}
-        <div className="card">
-          <div className="card-title">
-            <span>⏱️ Timeout & Gateway Delay</span>
-          </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Nginx default timeout is configured at <strong>5 seconds</strong>. If delay exceeds 5s, Nginx returns <code>504 Gateway Timeout</code>.
-          </p>
-          <div className="input-row">
-            <label style={{ flex: 1 }}>Delay (ms):</label>
-            <select value={delayMs} onChange={(e) => setDelayMs(Number(e.target.value))}>
-              <option value={1000}>1000 ms (1s - OK)</option>
-              <option value={3000}>3000 ms (3s - OK)</option>
-              <option value={6000}>6000 ms (6s - 504 Timeout!)</option>
-              <option value={10000}>10000 ms (10s - 504 Timeout!)</option>
-            </select>
-          </div>
-          <button className="warning" onClick={handleTestDelay}>
-            ⌛ Send Delayed Request ({delayMs}ms)
-          </button>
-        </div>
-
-        {/* Chaos: Resource Limits & Failover */}
-        <div className="card">
-          <div className="card-title">
-            <span>💥 Chaos & Resource Stress</span>
-          </div>
-          <div className="button-group">
-            <button className="danger" onClick={handleTriggerCpuStress}>
-              🔥 Stress CPU ({stressDuration}ms)
-            </button>
-            <button className="danger" onClick={handleTriggerMemoryStress}>
-              💾 Leak {memoryMB}MB RAM
-            </button>
-            <button onClick={handleClearMemory}>
-              🧹 Free Buffers
-            </button>
-            <button className="warning" onClick={handleToggleHealth}>
-              🩺 Toggle Health (UP/DOWN)
-            </button>
-          </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Allocating beyond container limits (e.g. 128MB) causes the Linux kernel / Podman to trigger an <strong>OOM Kill</strong>.
-          </p>
-        </div>
-      </div>
-
-      {/* Live Request Stream Log */}
-      <div className="card">
-        <div className="card-title">
-          <span>📜 Realtime Request & Gateway Log</span>
-          <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Latest 100 events</span>
-        </div>
-        <div className="log-terminal mono">
-          {logs.map((log) => {
-            let statusClass = 'status-200';
-            if (log.status >= 500) statusClass = log.status === 504 ? 'status-504' : 'status-502';
-            else if (log.status >= 400 || log.status === 0) statusClass = 'status-500';
-
-            return (
-              <div key={log.id} className="log-entry">
-                <span style={{ color: 'var(--text-muted)' }}>[{log.timestamp}]</span>
-                <span className={`status-tag ${statusClass}`}>{log.status || 'ERR'}</span>
-                <span style={{ color: 'var(--accent-cyan)' }}>{log.method}</span>
-                <span style={{ color: 'var(--text-main)' }}>{log.url}</span>
-                <span style={{ color: 'var(--accent-purple)' }}>({log.instance})</span>
-                <span style={{ color: 'var(--accent-amber)', marginLeft: 'auto' }}>{log.latency}ms</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Main Tab Views */}
+      <main className="tab-content">
+        {activeTab === 'board' ? (
+          <TaskBoard onLogEvent={addLog} />
+        ) : (
+          <ChaosLab
+            serverInfo={serverInfo}
+            instanceCounts={instanceCounts}
+            stats={stats}
+            logs={logs}
+            onResetStats={handleResetStats}
+            isRunningLoad={isRunningLoad}
+            batchCount={batchCount}
+            setBatchCount={setBatchCount}
+            concurrency={concurrency}
+            setConcurrency={setConcurrency}
+            onRunLoadTest={handleRunLoadTest}
+            delayMs={delayMs}
+            setDelayMs={setDelayMs}
+            onTestDelay={handleTestDelay}
+            stressDuration={stressDuration}
+            onTriggerCpuStress={handleTriggerCpuStress}
+            memoryMB={memoryMB}
+            onTriggerMemoryStress={handleTriggerMemoryStress}
+            onClearMemory={handleClearMemory}
+            onToggleHealth={handleToggleHealth}
+          />
+        )}
+      </main>
     </div>
   );
 }

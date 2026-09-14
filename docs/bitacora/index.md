@@ -6,6 +6,11 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-13: Implementación Etapa 2 - Tablero Distribuido (TaskBoard) con Firmas de Nodo sobre Redis**](/bitacora/2026-09-13-etapa-2-frontend-tablero-distribuido)
+  - Desarrollo del componente React 18 `TaskBoard` en worktree aislado basado en el contrato `/api/tasks`.
+  - Badges coloreados por nodo para firma de creación (`createdByNode`) y firma de lectura (`servedByNode`).
+  - Navegación por pestañas para convivencia entre el Tablero y el Laboratorio de Caos y Métricas (`ChaosLab`).
+  - Modularización del frontend y validación con `npm run build` en Vite.
 - [**2026-09-13: TP 1 - Etapa 1: Persistencia en Redis y Tablero Distribuido con Firma de Nodos**](/bitacora/2026-09-13-tp1-etapa-1-redis-node-signature)
   - Almacenamiento centralizado de tareas en Redis (`redis:7-alpine`) con volumen persistente `redis-data`.
   - Arquitectura *Node Signature Board* con firma de creación (`createdByNode`) y servicio (`servedByNode`).
