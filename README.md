@@ -1,6 +1,6 @@
 # 🚀 Podman Container & Microservices Lab
 
-[![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://68.211.137.116)
+[![Production Demo](https://img.shields.io/badge/Demo-Online%20(Azure%20VM)-brightgreen?style=flat&logo=googlechrome&logoColor=white)](http://devops-maxivalenzano.com)
 [![GitHub Release](https://img.shields.io/github/v/release/maxivalenzano/dev-ops-clase-2?color=blue&logo=github)](https://github.com/maxivalenzano/dev-ops-clase-2/releases)
 [![Azure Pipelines Build](https://dev.azure.com/maxivalenzano/DevOps/_apis/build/status/maxivalenzano.dev-ops-clase-2?branchName=devel)](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=maxivalenzano_DevOps&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
@@ -15,7 +15,7 @@
 
 A lightweight, hands-on lab designed to master **Podman**, container orchestration, **Nginx** reverse proxying, load balancing, timeouts, resource limits (CPU/OOM), and native **Podman Pods** (`localhost` network sharing). Deployed automatically to Azure VM via Azure DevOps Multi-Stage CI/CD.
 
-👉 **Live Application**: [http://68.211.137.116](http://68.211.137.116)
+👉 **Live Application**: [http://devops-maxivalenzano.com](http://devops-maxivalenzano.com)
 
 ---
 

@@ -360,7 +360,7 @@ stages:
                       RELEASE_JSON=$(jq -n \
                         --arg tag "v${SEMVER_TAG}" \
                         --arg name "Release v${SEMVER_TAG}" \
-                        --arg body "Automated deployment v${SEMVER_TAG} to Azure VM (http://68.211.137.116) via Azure DevOps Multi-Stage Pipeline." \
+                        --arg body "Automated deployment v${SEMVER_TAG} to Azure VM (http://devops-maxivalenzano.com) via Azure DevOps Multi-Stage Pipeline." \
                         '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false, generate_release_notes: true}')
                       curl -fsS -X POST \
                         -H "User-Agent: AzureDevOps-Pipeline" \
@@ -379,7 +379,7 @@ stages:
                         https://api.github.com/repos/maxivalenzano/dev-ops-clase-2 \
                         -d '{
                           "description": "🚀 DevOps Lab: Microservices (.NET 10 & React 18), Nginx Gateway, automated CI/CD in Azure DevOps with SemVer & Docker Compose.",
-                          "homepage": "http://68.211.137.116"
+                          "homepage": "http://devops-maxivalenzano.com"
                         }' || echo "==> [Aviso] No se pudo actualizar descripción/homepage (revisar permisos del token)."
 
                       curl -fsS -X PUT \
@@ -419,7 +419,7 @@ stages:
                           https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments/${DEPLOY_ID}/statuses \
                           -d "{
                             \"state\": \"success\",
-                            \"environment_url\": \"http://68.211.137.116\",
+                            \"environment_url\": \"http://devops-maxivalenzano.com\",
                             \"description\": \"Despliegue v${SEMVER_TAG} verificado en vivo con Smoke Tests\"
                           }" > /dev/null
                         echo "==> GitHub Deployments actualizado exitosamente a 'success'."

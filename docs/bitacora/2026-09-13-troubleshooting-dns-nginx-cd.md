@@ -89,7 +89,7 @@
    # HTTP/1.1 200 OK {"instance":"backend-dotnet-1","isHealthy":true...}
    ```
 2. **Acceso Externo Validado**:
-   - Navegador en `http://68.211.137.116/`: Carga fluida de la aplicación React 18, comunicación activa con el backend de .NET 10 y visualización del badge **`v2.1.2`**.
+   - Navegador en `http://devops-maxivalenzano.com/` (y `http://68.211.137.116/`): Carga fluida de la aplicación React 18, comunicación activa con el backend de .NET 10 y visualización del badge **`v2.1.2`**.
 
 ---
 
