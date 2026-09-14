@@ -2,6 +2,9 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using System.Threading;
+using Backend.Models;
+using Backend.Services;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +23,24 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
+var redisConn = Environment.GetEnvironmentVariable("REDIS_CONNECTION");
+if (!string.IsNullOrEmpty(redisConn))
+{
+    try
+    {
+        var redisOptions = ConfigurationOptions.Parse(redisConn);
+        redisOptions.AbortOnConnectFail = false;
+        redisOptions.ConnectTimeout = 2000;
+        var redis = ConnectionMultiplexer.Connect(redisOptions);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Warning] Could not connect to Redis at {redisConn}: {ex.Message}");
+    }
+}
+builder.Services.AddSingleton<ITaskService, TaskService>();
 
 var app = builder.Build();
 
@@ -258,7 +279,50 @@ api.MapPost("/health/toggle", () =>
     });
 });
 
+// 7. Distributed Task Board Endpoints (Redis / Node Signature)
+api.MapGet("/tasks", async (ITaskService taskService) =>
+{
+    var tasks = await taskService.GetAllTasksAsync();
+    var list = tasks.ToList();
+    return Results.Ok(new TasksResponse(instanceName, list.Count, list));
+});
+
+api.MapPost("/tasks", async (CreateTaskRequest? body, ITaskService taskService) =>
+{
+    if (string.IsNullOrWhiteSpace(body?.Title))
+    {
+        return Results.BadRequest(new { error = "Title cannot be empty" });
+    }
+
+    var created = await taskService.CreateTaskAsync(body.Title, instanceName);
+    return Results.Created($"/api/tasks/{created.Id}", created);
+});
+
+api.MapPut("/tasks/{id}/toggle", async (string id, ITaskService taskService) =>
+{
+    var updated = await taskService.ToggleTaskAsync(id);
+    if (updated == null)
+    {
+        return Results.NotFound(new { error = "Task not found" });
+    }
+
+    return Results.Ok(updated);
+});
+
+api.MapDelete("/tasks/{id}", async (string id, ITaskService taskService) =>
+{
+    var deleted = await taskService.DeleteTaskAsync(id);
+    if (!deleted)
+    {
+        return Results.NotFound(new { error = "Task not found" });
+    }
+
+    return Results.Ok(new { message = "Task deleted successfully", id = id });
+});
+
 app.Run();
 
 public record CpuStressRequest([property: JsonPropertyName("duration")] int? Duration);
 public record MemoryStressRequest([property: JsonPropertyName("mb")] int? Mb);
+
+public partial class Program { }
