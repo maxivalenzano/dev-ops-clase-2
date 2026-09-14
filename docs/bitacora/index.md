@@ -6,20 +6,19 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
-<<<<<<< Updated upstream
+- [**2026-09-14: Configuración de Dominio Personalizado (IONOS DNS), IP Estática en Azure y Nginx Gateway**](/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx)
+  - Vinculación del dominio `devops-maxivalenzano.com` a la infraestructura en Azure VM (`68.211.137.116`).
+  - Configuración de zona DNS en IONOS con registros `A` (@) y `CNAME` (www).
+  - Verificación de persistencia de IP pública estática en Azure.
+  - Virtual host en Nginx y actualización transversal de URLs en GitHub, Azure DevOps Wiki y pipelines.
+
 - [**2026-09-14: TP 1 - Etapa 5: CI con Análisis Estático de Seguridad (SAST), SonarQube Cloud y Badges**](/bitacora/2026-09-14-etapa-5-azure-pipelines-sast-sonarcloud)
   - Integración de SonarQube Cloud SAST para escaneo estático de vulnerabilidades, security hotspots y code smells en .NET 10.
   - Evaluación y publicación automatizada del Quality Gate oficial en Azure Pipelines con compuerta de paso de calidad.
   - Generación dual de reportes de cobertura (Coverlet OpenCover + Cobertura) para dashboards de SonarCloud y Azure DevOps.
   - Auditoría complementaria de dependencias y Containerfiles mediante Trivy Security Scanner.
   - Badges dinámicos oficiales de Azure Pipelines y SonarCloud incorporados en `README.md`.
-=======
-- [**2026-09-14: Configuración de Dominio Personalizado (IONOS DNS), IP Estática en Azure y Nginx Gateway**](/bitacora/2026-09-14-configuracion-dominio-dns-ionos-nginx)
-  - Vinculación del dominio `devops-maxivalenzano.com` a la infraestructura en Azure VM (`68.211.137.116`).
-  - Configuración de zona DNS en IONOS con registros `A` (@) y `CNAME` (www).
-  - Verificación de persistencia de IP pública estática en Azure.
-  - Virtual host en Nginx y actualización transversal de URLs en GitHub, Azure DevOps Wiki y pipelines.
->>>>>>> Stashed changes
+
 
 - [**2026-09-14: Gobernanza Ágil en Azure DevOps, Estructuración de Work Items y Troubleshooting de Plataforma**](/bitacora/2026-09-14-configuracion-azure-devops-gobernanza-workitems)
   - Migración de Process Template de `Basic` a `Agile` en la organización `maxivalenzano/DevOps`.

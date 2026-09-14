@@ -151,7 +151,7 @@ stages:
             inputs:
               SonarCloud: 'SonarCloud'
               organization: 'maxivalenzano'
-              scannerMode: 'MSBuild'
+              scannerMode: 'dotnet'
               projectKey: 'maxivalenzano_DevOps'
               projectName: 'DevOps'
               extraProperties: |
