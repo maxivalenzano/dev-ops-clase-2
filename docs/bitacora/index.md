@@ -6,6 +6,12 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Implementación de Cluster Frontend Stateless de 3 Réplicas con Nginx y Alta Disponibilidad**](/bitacora/2026-09-14-cluster-frontend-3-replicas-alta-disponibilidad)
+  - Escalado horizontal del frontend SPA a 3 réplicas simétricas (`frontend-1`, `frontend-2`, `frontend-3`) con límites de CPU (`0.25`) y memoria (`64M`).
+  - Balanceo de carga en Nginx Gateway con upstream `frontend_cluster` (Round-Robin) y failover con `proxy_next_upstream` y 3 reintentos.
+  - Exposición de identidad de contenedor mediante cabecera HTTP `X-Frontend-Instance` y endpoint diagnóstico `/frontend-info` sin caché.
+  - Integración de telemetría de doble nivel en React 18: badges en cabecera principal y en TaskBoard mostrando instancias activas de Frontend y Backend.
+
 - [**2026-09-14: Refactorización de Pipeline CI/CD: Arquitectura Desacoplada en 4 Stages**](/bitacora/2026-09-14-refactor-pipeline-4-stages-devsecops)
   - Desacoplamiento del CI monolítico en dos etapas independientes: Quality Gate (Tests + SAST) y Packaging OCI.
   - Implementación de principio Fail-Fast: bloqueo inmediato de construcción de contenedores ante fallos de calidad o seguridad.

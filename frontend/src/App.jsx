@@ -5,6 +5,7 @@ import ChaosLab from './components/ChaosLab';
 export default function App() {
   const [activeTab, setActiveTab] = useState('board');
   const [serverInfo, setServerInfo] = useState(null);
+  const [frontendInfo, setFrontendInfo] = useState(null);
   const [logs, setLogs] = useState([]);
   const [isRunningLoad, setIsRunningLoad] = useState(false);
   const [batchCount, setBatchCount] = useState(20);
@@ -33,8 +34,22 @@ export default function App() {
     }
   };
 
+  const fetchFrontendInfo = async () => {
+    try {
+      const res = await fetch('/frontend-info');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setFrontendInfo(data);
+      return data;
+    } catch (err) {
+      setFrontendInfo({ instance: 'Desconocido', status: 'DOWN', tier: 'frontend' });
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchServerInfo();
+    fetchFrontendInfo();
   }, []);
 
   const sendSingleRequest = async (url, options = {}) => {
@@ -113,6 +128,7 @@ export default function App() {
     await Promise.all(workers);
     setIsRunningLoad(false);
     fetchServerInfo();
+    fetchFrontendInfo();
   };
 
   const handleTestDelay = () => {
@@ -171,20 +187,75 @@ export default function App() {
             </span>
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            React 18 + .NET Minimal API + Redis + Nginx Reverse Proxy
+            React 18 (Cluster HA) + .NET Minimal API + Redis + Nginx Reverse Proxy
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          {serverInfo ? (
-            <span style={{ color: 'var(--accent-green)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.85rem' }}>
-              ● Conectado: <strong className="mono">{serverInfo.instance || 'OK'}</strong>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Frontend Node Badge */}
+          {frontendInfo ? (
+            <span style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              color: 'var(--accent-blue, #38bdf8)',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '9999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}>
+              🖥️ UI: <strong className="mono">{frontendInfo.instance || 'frontend-react'}</strong>
             </span>
           ) : (
-            <span style={{ color: 'var(--accent-rose)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-              ○ Sin conexión
+            <span style={{
+              backgroundColor: 'rgba(148, 163, 184, 0.1)',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              color: 'var(--text-muted)',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '9999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.85rem'
+            }}>
+              🖥️ UI: <span className="mono">Cargando...</span>
             </span>
           )}
-          <button onClick={fetchServerInfo}>🔄 Refresh Node Info</button>
+
+          {/* Backend API Badge */}
+          {serverInfo ? (
+            <span style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              color: 'var(--accent-green, #10b981)',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '9999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontWeight: 600,
+              fontSize: '0.85rem'
+            }}>
+              ● API: <strong className="mono">{serverInfo.instance || 'OK'}</strong>
+            </span>
+          ) : (
+            <span style={{
+              backgroundColor: 'rgba(244, 63, 94, 0.12)',
+              border: '1px solid rgba(244, 63, 94, 0.35)',
+              color: 'var(--accent-rose, #f43f5e)',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '9999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.85rem'
+            }}>
+              ○ API: Sin conexión
+            </span>
+          )}
+
+          <button onClick={() => { fetchServerInfo(); fetchFrontendInfo(); }}>🔄 Refresh Node Info</button>
         </div>
       </header>
 
@@ -207,7 +278,11 @@ export default function App() {
       {/* Main Tab Views */}
       <main className="tab-content">
         {activeTab === 'board' ? (
-          <TaskBoard onLogEvent={addLog} />
+          <TaskBoard
+            onLogEvent={addLog}
+            frontendInfo={frontendInfo}
+            onRefreshFrontend={fetchFrontendInfo}
+          />
         ) : (
           <ChaosLab
             serverInfo={serverInfo}
