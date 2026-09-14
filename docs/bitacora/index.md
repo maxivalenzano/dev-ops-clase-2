@@ -6,6 +6,13 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-09-14: Troubleshooting de Quality Gate: SonarQube Cloud API 403, Gobernanza de Branches y Migración v4**](/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate)
+  - Resolución del error 403 Forbidden en `SonarCloudPublish` por token de análisis sin permisos de lectura (`Browse`).
+  - Diagnóstico de limitaciones del plan Free de SonarQube Cloud y configuración de visibilidad pública del proyecto.
+  - Sincronización de `devel` como `MAIN BRANCH` oficial para habilitar el análisis gratuito en la rama de integración.
+  - Blindaje condicional en `azure-pipelines.yml` para ejecutar SAST exclusivamente en `devel` sin bloquear tags (`v*`) ni releases.
+  - Migración a tareas oficiales v4 (`SonarCloudPrepare@4`, `SonarCloudAnalyze@4`, `SonarCloudPublish@4`) y corrección de advertencias de SCM y cobertura.
+
 - [**2026-09-14: Implementación de Cluster Frontend Stateless de 3 Réplicas con Nginx y Alta Disponibilidad**](/bitacora/2026-09-14-cluster-frontend-3-replicas-alta-disponibilidad)
   - Escalado horizontal del frontend SPA a 3 réplicas simétricas (`frontend-1`, `frontend-2`, `frontend-3`) con límites de CPU (`0.25`) y memoria (`64M`).
   - Balanceo de carga en Nginx Gateway con upstream `frontend_cluster` (Round-Robin) y failover con `proxy_next_upstream` y 3 reintentos.
