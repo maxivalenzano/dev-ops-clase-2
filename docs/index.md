@@ -2,9 +2,9 @@
 layout: home
 
 hero:
-  name: "DevOps & Podman Lab"
+  name: "DevOps Lab"
   text: "Laboratorio de Microservicios y Contenedores"
-  tagline: "Arquitectura resiliente en Azure VM con Nginx, .NET 10, React 18, Redis, Portainer CE y CI/CD en 4 Stages."
+  tagline: "Laboratorio con Nginx, .NET 10, React 18 y Redis. Nube AWS y CI/CD implementados y validados."
   actions:
     - theme: brand
       text: 🎓 Ver Presentación Oficial
@@ -15,23 +15,26 @@ hero:
     - theme: alt
       text: 📝 Bitácora de Trabajo
       link: /bitacora/
+    - theme: alt
+      text: 🌐 Aplicación EC2
+      link: http://18.216.227.211
 
 features:
   - icon: 🎓
     title: Presentación Técnica Integral
-    details: "Síntesis ejecutiva de todo el ecosistema: Azure VM (IaaS), NSG, pipeline de 4 stages, registro dual ACR/GHCR y Portainer."
+    details: "CI/CD 81 y la persistencia de tareas tras rollback, nueva entrega y reinicio real de Ubuntu están validados."
   - icon: 🚢
     title: Portainer CE & Observabilidad
-    details: "Monitoreo visual de 10 contenedores en tiempo real sobre el puerto 9000, con métricas de CPU/RAM y soporte para Chaos Testing."
+    details: "Panel para administrar el stack Compose y observar sus contenedores durante las pruebas."
   - icon: 🛡️
     title: DevSecOps & SonarQube Cloud
-    details: "Pipeline automatizado con cálculo SemVer dinámico, 42 tests xUnit, escaneo SAST y auditoría de vulnerabilidades con Trivy."
+    details: "Pipeline de Azure DevOps con versionado SemVer, pruebas xUnit, análisis SonarCloud y auditoría Trivy."
   - icon: ⚖️
     title: Nginx Gateway & Resiliencia
-    details: "Clúster de 3 réplicas Frontend y 3 réplicas Backend con balanceo Round Robin, failover activo y timeout de 5 segundos."
+    details: "Tres réplicas de frontend y tres de backend tras Nginx, con Redis compartido y timeout de 5 segundos."
   - icon: 🦭
-    title: Podman & Pods Nativos
-    details: "Comparativa entre contenedores rootless locales con red compartida localhost y orquestación con Docker Compose en Azure."
+    title: "Podman local y Docker en EC2"
+    details: "Compose usa Podman localmente y Docker en Ubuntu EC2. La versión 3.0.0-build.81 está desplegada."
   - icon: 💥
     title: Chaos & Stress Testing
     details: "Simulación de consumo extremo de RAM para activar el OOM Killer del kernel Linux, saturación de CPU y degradación de salud."
