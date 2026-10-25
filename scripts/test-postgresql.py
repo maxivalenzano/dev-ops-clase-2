@@ -51,6 +51,7 @@ def wait(check, seconds=60):
 
 
 def http(port, path='/api/ready', method='GET', body=None, status=200):
+    started = time.monotonic()
     request = urllib.request.Request(
         f'http://127.0.0.1:{port}{path}', method=method,
         data=json.dumps(body).encode() if body is not None else None,
@@ -60,7 +61,7 @@ def http(port, path='/api/ready', method='GET', body=None, status=200):
             code, payload = response.status, response.read()
     except urllib.error.HTTPError as exc:
         code, payload = exc.code, exc.read()
-    assert code == status, (path, code, payload[:500])
+    assert code == status, (path, code, f'{time.monotonic() - started:.3f}s', payload[:500])
     return json.loads(payload) if payload else None
 
 
@@ -279,6 +280,11 @@ if __name__ == '__main__':
     try:
         main()
     finally:
+        if any(error is not None for _, _, error in RESULTS):
+            for name in CONTAINERS:
+                if '-p3-' in name or name.endswith('-gateway'):
+                    logs = command('docker', 'logs', '--tail', '60', name, check=False)
+                    print('Failure diagnostics:', name, logs.stdout, logs.stderr, flush=True)
         suite = ET.Element('testsuite', name='PostgreSQL migrations', tests=str(len(RESULTS)),
                            failures=str(sum(error is not None for _, _, error in RESULTS)))
         for name, elapsed, error in RESULTS:

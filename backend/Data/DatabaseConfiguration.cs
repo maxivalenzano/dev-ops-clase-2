@@ -19,6 +19,7 @@ public static class DatabaseConfiguration
             // Return database unavailability before Nginx's five-second upstream read timeout.
             Timeout = 2,
             CommandTimeout = 30,
+            CancellationTimeout = 500,
             IncludeErrorDetail = false
         };
         return options.ConnectionString;
