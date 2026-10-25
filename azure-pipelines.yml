@@ -19,7 +19,7 @@ parameters:
   - name: releasePhase
     displayName: 'Release de la demostración de migraciones'
     type: string
-    default: P1
+    default: P3
     values: [P1, P2, P3]
 
 trigger:
@@ -352,6 +352,7 @@ stages:
                   artifact: migrations
                 - bash: |
                     set -euo pipefail
+                    mkdir -p "$BACKUP_EXPORT_DIR"
                     bash scripts/prepare-postgresql.sh
                   displayName: 'Preflight → backup/restore → migrador EF → validación'
                   env:
@@ -365,12 +366,12 @@ stages:
                     FRONTEND_IMAGE: $(frontendImage)
                     GHCR_PULL_TOKEN: $(GHCR_PULL_TOKEN)
                     GHCR_USERNAME: 'maxivalenzano'
-                    BACKUP_EXPORT_DIR: '$(Pipeline.Workspace)/database-backup'
+                    BACKUP_EXPORT_DIR: '$(Pipeline.Workspace)/database-backup/$(Build.BuildId)'
                 - publish: /opt/devops-lab/releases/$(Build.BuildId)
                   artifact: postgresql-evidence
                   displayName: 'Publicar recibo sin secretos'
                   condition: succeededOrFailed()
-                - publish: $(Pipeline.Workspace)/database-backup
+                - publish: $(Pipeline.Workspace)/database-backup/$(Build.BuildId)
                   artifact: database-backup
                   displayName: 'Guardar copia fuera de EC2 (acceso restringido al build)'
                   condition: succeededOrFailed()
