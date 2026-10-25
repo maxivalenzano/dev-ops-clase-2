@@ -19,6 +19,9 @@ public class TaskItem
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    [JsonPropertyName("priority")]
+    public int? Priority { get; set; } = 2;
+
     public TaskItem()
     {
     }

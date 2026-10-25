@@ -1,17 +1,18 @@
 # Arquitectura y flujo del laboratorio
 
-El proyecto es un laboratorio para observar balanceo, estado compartido y fallos de contenedores. La topología actual se define en [`compose.yaml`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/main/compose.yaml): Nginx recibe el tráfico, tres réplicas sirven la SPA, tres réplicas exponen la API y Redis almacena las tareas. Portainer permite ver los contenedores.
+El proyecto es un laboratorio para observar balanceo, estado compartido y fallos de contenedores. La entrega existente en EC2 usa Redis hasta que se confirme el corte PostgreSQL P1. El repositorio incorpora PostgreSQL/EF Core y define su infraestructura persistente separada en [`compose.data.yaml`](../../compose.data.yaml); el despliegue remoto de esa arquitectura todavía está pendiente.
 
 ```mermaid
 flowchart LR
     U[Navegador] --> N[Nginx :80]
     N --> F[3 frontends React / Nginx :8081]
     N --> B[3 backends .NET 10 :3000]
-    B --> R[(Redis 7)]
+    B --> R[(Redis legado hasta P1)]
+    B -. destino tras P1 .-> PG[(PostgreSQL 17)]
     P[Portainer :9000 / :9443] -. administra .-> N
 ```
 
-Las réplicas de frontend y backend comparten imágenes; cada contenedor recibe su propio nombre de instancia. Redis mantiene las tareas compartidas en el volumen `redis-data`. La topología sirve para probar réplicas y fallos de contenedores dentro de una máquina; no protege ante la caída del host.
+Las réplicas comparten imágenes; cada contenedor recibe su propio nombre. Al completar P1, PostgreSQL será la fuente de verdad y Redis quedará conservado como legado, sin recibir escrituras nuevas. La base y la aplicación comparten VM; no se protege ante caída del host.
 
 ## Motores de contenedores
 
@@ -28,6 +29,6 @@ Redis será interno a la red Compose, con AOF y healthcheck, sin puerto publicad
 
 La aplicación está desplegada como `3.0.0-build.81` en [http://18.216.227.211](http://18.216.227.211); los nueve contenedores están en ejecución. El agente `ec2-devops` está activo en `devops-ec2-env`. CI/CD 81 completó sus cuatro etapas y publicó Release `v3.0.0` y Deployment `ec2-demo`. Las imágenes backend y frontend comparten el SHA `3bbd09d848338f63efe6900c05a7004fde4281be`.
 
-Las pruebas de despliegue validaron HTTP 200 local y público, persistencia Redis tras reiniciar Redis y recrear un backend, failover frontend/backend, 30 solicitudes entre tres backends y 12 respuestas `frontend-info` de tres frontends. Redis empezó vacío, según confirmó el usuario. Portainer CE 2.45.3 está inicializado y su API autenticada confirma nueve contenedores; las credenciales de administración están guardadas localmente fuera del repositorio.
+Como antecedente, la entrega anterior validó HTTP 200, persistencia Redis, failover frontend/backend y balanceo entre réplicas. La inspección de solo lectura más reciente observó EC2 en `3.0.3-build.85`, Redis vacío, 1.158 MiB disponibles y cerca de 15 GiB libres. No prueba PostgreSQL ni su despliegue. Los resultados históricos de Portainer pertenecen a la entrega previa.
 
-CI/CD 81, las 42 pruebas backend y los builds frontend y documentación pasaron. El rollback manual, la nueva entrega y el reinicio real de Ubuntu conservaron una tarea Redis de prueba; las verificaciones post-reinicio pasaron y luego la tarea se eliminó. La demo oficial usa HTTP por IP; dominio y HTTPS de aplicación son opcionales y no se ejecutaron. Podman en WSL no está validado; los detalles están en la [bitácora](/bitacora/). El helper de acceso a Portainer permanece local fuera del repositorio y no se publica.
+CI/CD 81, 42 pruebas y el rollback descritos en registros anteriores se refieren a la arquitectura Redis y no validan el cambio PostgreSQL. El build local del frontend de la integración nueva pasó; CI, stages PostgreSQL/CD y P1/P2/P3 remotos permanecen pendientes de confirmación. La demo histórica usa HTTP por IP. Consultá la [bitácora PostgreSQL/EF](/bitacora/2026-10-25-postgresql-ef-migraciones) para el estado actual.

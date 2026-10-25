@@ -81,6 +81,8 @@ export default defineConfig({
           text: 'Microservicio Backend',
           items: [
             { text: 'Descripción y Endpoints', link: '/backend/' },
+            { text: 'Plan PostgreSQL y EF Core', link: '/backend/plan-integracion-postgresql-ef' },
+            { text: 'Guion de migraciones P1/P2/P3', link: '/backend/migraciones-demo' },
             { text: 'Pruebas de Estrés y Chaos', link: '/backend/#chaos-engineering-y-estres' },
             { text: 'Gestión de Memoria y CPU', link: '/backend/#limites-de-recursos' }
           ]
@@ -112,6 +114,7 @@ export default defineConfig({
           text: 'Bitácora de Trabajo',
           items: [
             { text: 'Índice de Entradas', link: '/bitacora/' },
+            { text: '2026-10-25: Plan PostgreSQL y EF Core', link: '/bitacora/2026-10-25-postgresql-ef-migraciones' },
             { text: '2026-09-14: Portainer CE & Azure NSG Puerto 9000', link: '/bitacora/2026-09-14-implementacion-portainer-ce-gestion-visual-azure' },
             { text: '2026-09-14: Troubleshooting SonarQube Cloud & QG', link: '/bitacora/2026-09-14-troubleshooting-sonarqube-cloud-quality-gate' },
             { text: '2026-09-14: Cluster Frontend 3 Réplicas HA', link: '/bitacora/2026-09-14-cluster-frontend-3-replicas-alta-disponibilidad' },

@@ -39,7 +39,7 @@ def main():
         'description': 'EC2 deployment ' + os.environ['IMAGE_TAG']})
     api(f'/deployments/{deployment["id"]}/statuses', {
         'state': 'success', 'environment_url': app_url,
-        'description': 'Compose, HTTP and shared Redis verification passed.'})
+        'description': 'Compose, readiness, HTTP and PostgreSQL verification passed.'})
     print(f'GitHub release/deployment metadata published for {tag}.')
 
 

@@ -16,10 +16,14 @@ El backend es una API REST construida con **.NET 10 LTS Minimal API**, diseñada
 
 ## Despliegue actual
 
-La versión `3.0.0-build.81` está desplegada en [http://18.216.227.211](http://18.216.227.211), con tres réplicas backend y Redis interno en EC2. Las validaciones confirmaron lectura/escritura compartida en Redis, persistencia de una tarea tras rollback, nueva entrega y reinicio real de Ubuntu, además de 30 solicitudes atendidas entre las tres réplicas. La tarea marcador se eliminó después de la prueba y Redis quedó vacío.
+La entrega previa en [EC2](http://18.216.227.211) usaba tres réplicas backend y Redis; la validación de transición observó la versión `3.0.3-build.85` y Redis vacío. El backend del repositorio incorpora PostgreSQL/EF Core y fases de esquema, pero PostgreSQL en EC2 y el corte P1 todavía esperan confirmación de pipeline. Redis se conserva como legado durante la transición; consultar la [bitácora PostgreSQL](../bitacora/2026-10-25-postgresql-ef-migraciones) para el estado más reciente.
 | `POST` | `/api/stress/cpu` | Bucle intensivo de cálculo bloqueante | `{"duration": 3000}` |
 | `POST` | `/api/stress/memory` | Retención de buffers en memoria RAM | `{"mb": 50}` |
 | `POST` | `/api/stress/memory/clear`| Libera los buffers asignados y llama al Garbage Collector | - |
+
+## PostgreSQL y migraciones
+
+La integración PostgreSQL/EF Core ya tiene código y automatización en el repositorio; su ejecución remota aún no está verificada. Consultá el [plan de integración](./plan-integracion-postgresql-ef) y el [guion P1/P2/P3](./migraciones-demo).
 
 ---
 

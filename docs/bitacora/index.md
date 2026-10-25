@@ -6,6 +6,10 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-10-25: Planificación de PostgreSQL y migraciones EF Core**](/bitacora/2026-10-25-postgresql-ef-migraciones)
+  - Guion P1/P2/P3 para evolución de esquema, `Up`/`Down`, CI/CD y recuperación.
+  - Estado explícito: PostgreSQL y sus migraciones aún no se implementaron ni probaron.
+
 - [**2026-10-25: Inicio de migración del laboratorio a AWS EC2 y GHCR**](/bitacora/2026-10-25-migracion-aws-ec2)
   - Alcance y fases previstas para trasladar el despliegue desde Azure VM/ACR a AWS EC2/GHCR con Azure DevOps.
   - Estado inicial de solo lectura: EC2 accesible, aún sin Docker ni agente de Azure Pipelines; despliegue funcional pendiente.

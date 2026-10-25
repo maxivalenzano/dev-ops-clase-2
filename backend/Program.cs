@@ -5,7 +5,8 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using Backend.Models;
 using Backend.Services;
-using StackExchange.Redis;
+using Backend.Data;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,23 +14,15 @@ var portEnv = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portEnv, out var parsedPort) ? parsedPort : 3000;
 var instanceName = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
 
-var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION");
-if (!string.IsNullOrEmpty(redisConnection))
+var testStorage = builder.Environment.IsEnvironment("Testing") && builder.Configuration["TASK_STORAGE"] == "TestMemory";
+if (testStorage)
+    builder.Services.AddSingleton<ITaskService>(_ => new TaskService());
+else
 {
-    try
-    {
-        var redisOptions = ConfigurationOptions.Parse(redisConnection);
-        redisOptions.AbortOnConnectFail = false;
-        redisOptions.ConnectTimeout = 2000;
-        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Warning] Could not configure Redis options for '{redisConnection}': {ex.Message}");
-    }
+    builder.Services.AddSingleton(new SchemaCompatibility());
+    builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(DatabaseConfiguration.ConnectionString(builder.Configuration)));
+    builder.Services.AddScoped<ITaskService, PostgresTaskService>();
 }
-builder.Services.AddSingleton<ITaskService, TaskService>();
-
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddCors(options =>
@@ -105,6 +98,21 @@ app.MapGet("/health", HandleHealth);
 var api = app.MapGroup("/api");
 api.MapGet("/", HandleRoot);
 api.MapGet("/health", HandleHealth);
+api.MapGet("/ready", async (HttpContext context) =>
+{
+    if (!isHealthy) return Results.Json(new { status = "DOWN" }, statusCode: 503);
+    if (testStorage) return Results.Ok(new { status = "UP", storage = "TestMemory" });
+    try
+    {
+        var db = context.RequestServices.GetRequiredService<AppDbContext>();
+        return Results.Ok(await DatabaseReadiness.CheckAsync(db));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[{instanceName}] Database readiness failed: {ex.GetType().Name}");
+        return Results.Json(new { status = "DOWN", storage = "PostgreSQL" }, statusCode: 503);
+    }
+});
 
 // 1. Instance and system information
 api.MapGet("/info", () =>
@@ -231,11 +239,11 @@ api.MapPost("/stress/memory", (HttpRequest request, MemoryStressRequest? body) =
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Memory allocation failed: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Memory allocation failed: {ex.GetType().Name}");
         return Results.Json(new
         {
             error = "Memory allocation failed",
-            message = ex.Message,
+            message = "Database operation failed; retry when readiness is UP",
             instance = instanceName
         }, statusCode: StatusCodes.Status500InternalServerError);
     }
@@ -279,7 +287,7 @@ api.MapPost("/health/toggle", () =>
     });
 });
 
-// 7. Distributed Task Board Endpoints (Redis persistence & Node Signature)
+// 7. Distributed Task Board Endpoints (PostgreSQL persistence & Node Signature)
 var tasksApi = api.MapGroup("/tasks");
 
 // GET /api/tasks
@@ -298,11 +306,11 @@ tasksApi.MapGet("/", async (ITaskService taskService) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks: {ex.GetType().Name}");
         return Results.Json(new
         {
-            error = "Failed to communicate with Redis",
-            message = ex.Message,
+            error = "Failed to communicate with PostgreSQL",
+            message = "Database operation failed; retry when readiness is UP",
             servedByNode = instanceName
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -323,32 +331,32 @@ tasksApi.MapGet("/{id}", async (string id, ITaskService taskService) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Query failed: {ex.Message}");
-        return Results.Json(new { error = "Redis query failed", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Query failed: {ex.GetType().Name}");
+        return Results.Json(new { error = "PostgreSQL query failed", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // POST /api/tasks
 tasksApi.MapPost("/", async (CreateTaskRequest? body, ITaskService taskService) =>
 {
-    if (string.IsNullOrWhiteSpace(body?.Title))
+    if (string.IsNullOrWhiteSpace(body?.Title) || body.Priority is < 1 or > 3)
     {
-        return Results.BadRequest(new { error = "Task title is required" });
+        return Results.BadRequest(new { error = "Task title is required; priority must be between 1 and 3" });
     }
 
     try
     {
-        var task = await taskService.CreateTaskAsync(body.Title, instanceName);
+        var task = await taskService.CreateTaskAsync(body.Title, instanceName, body.Priority ?? 2);
         Console.WriteLine($"[{instanceName}] Created task '{task.Id}' (Title: {task.Title})");
         return Results.Created($"/api/tasks/{task.Id}", task);
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to save task: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to save task: {ex.GetType().Name}");
         return Results.Json(new
         {
-            error = "Failed to save task to Redis",
-            message = ex.Message,
+            error = "Failed to save task to PostgreSQL",
+            message = "Database operation failed; retry when readiness is UP",
             servedByNode = instanceName
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
@@ -370,8 +378,8 @@ tasksApi.MapPut("/{id}/toggle", async (string id, ITaskService taskService) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task: {ex.Message}");
-        return Results.Json(new { error = "Failed to toggle task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task: {ex.GetType().Name}");
+        return Results.Json(new { error = "Failed to toggle task in PostgreSQL", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
@@ -391,8 +399,8 @@ tasksApi.MapDelete("/{id}", async (string id, ITaskService taskService) =>
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to delete task: {ex.Message}");
-        return Results.Json(new { error = "Failed to delete task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Failed to delete task: {ex.GetType().Name}");
+        return Results.Json(new { error = "Failed to delete task in PostgreSQL", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 

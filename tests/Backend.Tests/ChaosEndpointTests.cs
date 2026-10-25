@@ -6,11 +6,11 @@ using Xunit;
 
 namespace Backend.Tests;
 
-public class ChaosEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class ChaosEndpointTests : IClassFixture<TestApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApplicationFactory _factory;
 
-    public ChaosEndpointTests(WebApplicationFactory<Program> factory)
+    public ChaosEndpointTests(TestApplicationFactory factory)
     {
         _factory = factory;
     }

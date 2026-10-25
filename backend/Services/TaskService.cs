@@ -97,14 +97,14 @@ public class TaskService : ITaskService
         return null;
     }
 
-    public async Task<TaskItem> CreateTaskAsync(string title, string nodeName)
+    public async Task<TaskItem> CreateTaskAsync(string title, string nodeName, int priority = 2)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
             throw new ArgumentException("Title cannot be null or whitespace.", nameof(title));
         }
 
-        var task = new TaskItem(title, nodeName);
+        var task = new TaskItem(title, nodeName) { Priority = priority };
 
         if (_database != null)
         {

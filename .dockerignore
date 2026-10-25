@@ -1,0 +1,12 @@
+.git
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.vitepress/cache
+.env
+.env.*.local
+**/*.dump
+**/*.backup
+**/TestResults
+**/secrets
