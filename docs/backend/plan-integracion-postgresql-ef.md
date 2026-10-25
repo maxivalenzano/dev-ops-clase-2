@@ -1,6 +1,6 @@
 # Plan de integración: PostgreSQL y EF Core
 
-Fecha: 25/10/2026. Estado: planificación; acceso y recursos del servidor comprobados. PostgreSQL todavía no fue instalado ni probado en EC2.
+Fecha: 25/10/2026. Estado: implementación y validación completadas para P1/P2/P3. Las fases se desplegaron sucesivamente; P3 (`3.1.6-build.91`) está activa con esquema 004 y backfill verificado. Pasaron resiliencia, restore off-host y rollback P3→P1→P3. Los límites son los de una demo en una sola VM, sin alta disponibilidad; Podman en Windows/WSL no está validado. Evidencia detallada en la [bitácora PostgreSQL/EF](../bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
 ## Objetivo y alcance
 
@@ -8,9 +8,9 @@ Incorporar PostgreSQL como fuente de verdad del tablero, EF Core 10 como acceso 
 
 La demostración debe enseñar creación del esquema, actualización con datos existentes, restricciones, compatibilidad entre versiones, fallas controladas y recuperación. No incluye alta disponibilidad de base de datos ni cambios de motor mayor de PostgreSQL.
 
-Este documento propone acciones; las fases y criterios pendientes no son evidencia de implementación.
+Este documento conserva la arquitectura y los criterios de aceptación originales. La sección 1 registra la inspección inicial previa a PostgreSQL; es evidencia histórica, no el estado actual. Los resultados de cada release y de las pruebas finales están en la [bitácora](../bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
-## 1. Evidencia del servidor y viabilidad
+## 1. Inspección inicial del servidor (estado histórico previo a PostgreSQL)
 
 Inspección SSH de solo lectura realizada el 25/10/2026 a las 17:48 de Argentina (20:48 UTC). Se usó la clave indicada por el usuario, sin leer ni copiar su contenido, con `BatchMode=yes` y `StrictHostKeyChecking=yes`. El acceso terminó con código 0 y el host coincidió con la identidad registrada.
 

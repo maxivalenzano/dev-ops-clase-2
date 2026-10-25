@@ -8,22 +8,28 @@ El backend es una API REST construida con **.NET 10 LTS Minimal API**, diseñada
 
 | Método | Endpoint | Descripción | Parámetros / Body |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/` | Ping básico y estado de la instancia | - |
-| `GET` | `/api/info` | Métricas de memoria (Working Set RSS, Heap), CPU, uptime | - |
-| `GET` | `/api/health` | Health check (`200 UP` o `500 DOWN`) | - |
-| `POST` | `/api/health/toggle` | Alterna el estado de salud de la instancia | - |
+| `GET` | `/api/` | Ping básico e identidad de instancia | - |
+| `GET` | `/api/info` | Métricas de memoria, CPU y uptime | - |
+| `GET` | `/api/health` | Liveness de la instancia | - |
+| `GET` | `/api/ready` | Readiness contra PostgreSQL y rango de esquema compatible | - |
+| `POST` | `/api/health/toggle` | Alterna el estado de salud para pruebas | - |
+| `GET` | `/api/tasks` | Lista tareas compartidas | - |
+| `GET` | `/api/tasks/{id}` | Consulta una tarea | UUID en ruta |
+| `POST` | `/api/tasks` | Crea una tarea | JSON `CreateTaskRequest` |
+| `PUT` | `/api/tasks/{id}/toggle` | Cambia el estado completado | UUID en ruta |
+| `DELETE` | `/api/tasks/{id}` | Elimina una tarea | UUID en ruta |
 | `GET` | `/api/delay` | Respuesta demorada artificialmente | `?ms=3000` |
+| `POST` | `/api/stress/cpu` | Bucle intensivo de cálculo | `{"duration": 3000}` |
+| `POST` | `/api/stress/memory` | Retiene buffers en memoria | `{"mb": 50}` |
+| `POST` | `/api/stress/memory/clear` | Libera buffers de estrés | - |
 
 ## Despliegue actual
 
-La entrega previa en [EC2](http://18.216.227.211) usaba tres réplicas backend y Redis; la validación de transición observó la versión `3.0.3-build.85` y Redis vacío. El backend del repositorio incorpora PostgreSQL/EF Core y fases de esquema, pero PostgreSQL en EC2 y el corte P1 todavía esperan confirmación de pipeline. Redis se conserva como legado durante la transición; consultar la [bitácora PostgreSQL](../bitacora/2026-10-25-postgresql-ef-migraciones) para el estado más reciente.
-| `POST` | `/api/stress/cpu` | Bucle intensivo de cálculo bloqueante | `{"duration": 3000}` |
-| `POST` | `/api/stress/memory` | Retención de buffers en memoria RAM | `{"mb": 50}` |
-| `POST` | `/api/stress/memory/clear`| Libera los buffers asignados y llama al Garbage Collector | - |
+P1 (`3.1.1-build.87`), P2 (`3.1.2-build.88`) y P3 (`3.1.6-build.91`) se desplegaron sucesivamente y pasaron los cinco stages. P3 está activa con el esquema `20261025000400_004_RequirePriority`; Redis se conserva como legado. Las pruebas manuales de resiliencia, restore off-host y rollback P3→P1→P3 pasaron. Consultá la [bitácora PostgreSQL](../bitacora/2026-10-25-postgresql-ef-migraciones) para resultados y límites de esta evidencia.
 
 ## PostgreSQL y migraciones
 
-La integración PostgreSQL/EF Core ya tiene código y automatización en el repositorio; su ejecución remota aún no está verificada. Consultá el [plan de integración](./plan-integracion-postgresql-ef) y el [guion P1/P2/P3](./migraciones-demo).
+Las fases P1, P2 y P3 se desplegaron sucesivamente en EC2 con PostgreSQL y EF Core; P3 está activa. Build91 pasó los cinco stages; también pasaron resiliencia y rollback manual P3→P1→P3. Consultá el [plan de integración](./plan-integracion-postgresql-ef), el [guion P1/P2/P3](./migraciones-demo) y la [bitácora](../bitacora/2026-10-25-postgresql-ef-migraciones).
 
 ---
 
