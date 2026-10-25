@@ -14,15 +14,9 @@ var portEnv = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portEnv, out var parsedPort) ? parsedPort : 3000;
 var instanceName = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
 
-var testStorage = builder.Environment.IsEnvironment("Testing") && builder.Configuration["TASK_STORAGE"] == "TestMemory";
-if (testStorage)
-    builder.Services.AddSingleton<ITaskService>(_ => new TaskService());
-else
-{
-    builder.Services.AddSingleton(new SchemaCompatibility());
-    builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(DatabaseConfiguration.ConnectionString(builder.Configuration)));
-    builder.Services.AddScoped<ITaskService, PostgresTaskService>();
-}
+builder.Services.AddSingleton(new SchemaCompatibility());
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(DatabaseConfiguration.ConnectionString(builder.Configuration)));
+builder.Services.AddScoped<ITaskService, PostgresTaskService>();
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddCors(options =>
@@ -101,9 +95,10 @@ api.MapGet("/health", HandleHealth);
 api.MapGet("/ready", async (HttpContext context) =>
 {
     if (!isHealthy) return Results.Json(new { status = "DOWN" }, statusCode: 503);
-    if (testStorage) return Results.Ok(new { status = "UP", storage = "TestMemory" });
     try
     {
+        if (app.Environment.IsEnvironment("Testing") && context.RequestServices.GetRequiredService<ITaskService>() is TaskService)
+            return Results.Ok(new { status = "UP", storage = "TestMemory" });
         var db = context.RequestServices.GetRequiredService<AppDbContext>();
         return Results.Ok(await DatabaseReadiness.CheckAsync(db));
     }

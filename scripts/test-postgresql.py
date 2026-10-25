@@ -230,6 +230,22 @@ def main():
             assert sql(f"SELECT priority FROM tasks WHERE id='{marker}'", 'restore_test').stdout.strip() == '3'
         record('Backup restores separately; Down cannot recover dropped priority values', restore_and_down)
 
+        def sql_artifact():
+            name = RUN + '-sql-artifact'
+            command('docker', 'create', '--name', name, 'devops-migrator:test')
+            try:
+                command('docker', 'cp', name + ':/artifacts/forward.sql', str(work / 'forward.sql'))
+            finally:
+                command('docker', 'rm', name)
+            sql('CREATE DATABASE freshsql OWNER lab_migrator', database='postgres')
+            statement = (work / 'forward.sql').read_text(encoding='utf-8-sig')
+            sql(statement, database='freshsql', user='lab_migrator')
+            before = sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout
+            sql(statement, database='freshsql', user='lab_migrator')
+            assert sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout == before
+            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'freshsql').stdout.strip() == '4'
+        record('Published forward SQL executes twice on a separate empty database', sql_artifact)
+
         def fresh_to_latest():
             sql('CREATE DATABASE fresh OWNER lab_migrator', database='postgres')
             connection = work / 'migrator'
