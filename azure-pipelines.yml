@@ -4,27 +4,29 @@
 # Flujo desacoplado en 4 Stages:
 # 1. Versioning: Cálculo automático de SemVer mediante Conventional Commits.
 # 2. Quality Gate: Pruebas unitarias (.NET 10 xUnit), Cobertura, SonarQube Cloud SAST y Trivy.
-# 3. Packaging: Empaquetado inmutable y publicación OCI hacia Azure Container Registry (ACR) y GHCR.
-# 4. CD: Despliegue continuo hacia la VM Ubuntu en Azure mediante Docker Compose y Release Notes.
+# 3. Packaging: Build y publicación OCI obligatoria en GHCR.
+# 4. CD: Despliegue continuo en EC2 mediante Docker Compose.
 # ==============================================================================
 
 name: $(Date:yyyyMMdd)$(Rev:.r)
+
+parameters:
+  - name: deployDemo
+    displayName: 'Desplegar manualmente esta rama en EC2 para la demostración'
+    type: boolean
+    default: false
 
 trigger:
   branches:
     include:
       - main
       - devel
-  tags:
-    include:
-      - v*
 
 variables:
-  # Nombre de la Service Connection creada en Azure DevOps hacia tu ACR
-  acrServiceConnection: 'acrdevopsvalenzano-sc'
-  acrLoginServer: 'acrdevopsvalenzano.azurecr.io'
-  # Nombre del Environment de Azure DevOps donde está registrada tu VM
-  vmEnvironmentName: 'devops-vm-env'
+  vmEnvironmentName: 'devops-ec2-env'
+  backendImage: 'ghcr.io/maxivalenzano/dev-ops-backend'
+  frontendImage: 'ghcr.io/maxivalenzano/dev-ops-frontend'
+  appUrl: 'http://18.216.227.211'
 
 stages:
   # ----------------------------------------------------------------------------
@@ -239,250 +241,89 @@ stages:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
       - job: BuildAndPushContainers
-        displayName: 'Compilar y Publicar Contenedores (ACR & GHCR)'
+        displayName: 'Compilar y Publicar Contenedores en GHCR'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
           - checkout: self
 
-          # 1. Autenticación contra Azure Container Registry
-          - task: Docker@2
-            displayName: 'Docker Login a ACR'
-            inputs:
-              command: 'login'
-              containerRegistry: $(acrServiceConnection)
-
-          # 2. Construcción y publicación de Backend a ACR y GHCR
           - bash: |
-              echo "==> Construyendo imagen Backend con tag: $(SEMVER_TAG)"
+              set -euo pipefail
+              IMAGE_TAG="$(SEMVER_TAG)-build.$(Build.BuildId)"
+              SOURCE_COMMIT="$(Build.SourceVersion)"
+              echo "==> Autenticando en GHCR y publicando tag ${IMAGE_TAG}"
+              printf '%s' "$GHCR_PUSH_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
               docker build \
+                --platform linux/amd64 \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
-                --label "org.opencontainers.image.description=Backend .NET 10 Microservice" \
-                -t $(acrLoginServer)/backend:$(SEMVER_TAG) \
-                -t $(acrLoginServer)/backend:latest \
+                --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
+                -t "$(backendImage):${IMAGE_TAG}" \
                 -f backend/Containerfile backend
+              docker push "$(backendImage):${IMAGE_TAG}"
 
-              echo "==> Pusheando imagen Backend a ACR..."
-              docker push $(acrLoginServer)/backend:$(SEMVER_TAG)
-              docker push $(acrLoginServer)/backend:latest
-
-              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR) de forma no bloqueante
-              if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
-                echo "==> Autenticando y publicando imagen Backend en GitHub Packages (GHCR)..."
-                if echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin 2>/dev/null; then
-                  docker tag $(acrLoginServer)/backend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG)
-                  docker tag $(acrLoginServer)/backend:latest ghcr.io/maxivalenzano/dev-ops-backend:latest
-                  docker push ghcr.io/maxivalenzano/dev-ops-backend:$(SEMVER_TAG) || echo "==> [Aviso] No se pudo pushear tag semver a GHCR."
-                  docker push ghcr.io/maxivalenzano/dev-ops-backend:latest || echo "==> [Aviso] No se pudo pushear tag latest a GHCR."
-                  echo "==> Sincronización de Backend con GHCR finalizada."
-                else
-                  echo "==> [Aviso] No se pudo autenticar contra ghcr.io (revisar GITHUB_PAT)."
-                fi
-              fi
-            displayName: 'Build & Push Backend OCI (ACR + GHCR)'
-            env:
-              GITHUB_PAT: $(GITHUB_PAT)
-
-          # 3. Construcción y publicación de Frontend a ACR y GHCR
-          - bash: |
-              echo "==> Construyendo imagen Frontend con tag: $(SEMVER_TAG)"
               docker build \
-                --build-arg VITE_APP_VERSION="$(SEMVER_TAG)" \
+                --platform linux/amd64 \
+                --build-arg "VITE_APP_VERSION=$(SEMVER_TAG)" \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
-                --label "org.opencontainers.image.description=Frontend React 18 / Vite SPA" \
-                -t $(acrLoginServer)/frontend:$(SEMVER_TAG) \
-                -t $(acrLoginServer)/frontend:latest \
+                --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
+                -t "$(frontendImage):${IMAGE_TAG}" \
                 -f frontend/Containerfile frontend
-
-              echo "==> Pusheando imagen Frontend a ACR..."
-              docker push $(acrLoginServer)/frontend:$(SEMVER_TAG)
-              docker push $(acrLoginServer)/frontend:latest
-
-              # Si GITHUB_PAT está configurado, publicar también en GitHub Packages (GHCR) de forma no bloqueante
-              if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
-                echo "==> Autenticando y publicando imagen Frontend en GitHub Packages (GHCR)..."
-                if echo "${GITHUB_PAT}" | docker login ghcr.io -u maxivalenzano --password-stdin 2>/dev/null; then
-                  docker tag $(acrLoginServer)/frontend:$(SEMVER_TAG) ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG)
-                  docker tag $(acrLoginServer)/frontend:latest ghcr.io/maxivalenzano/dev-ops-frontend:latest
-                  docker push ghcr.io/maxivalenzano/dev-ops-frontend:$(SEMVER_TAG) || echo "==> [Aviso] No se pudo pushear tag semver frontend a GHCR."
-                  docker push ghcr.io/maxivalenzano/dev-ops-frontend:latest || echo "==> [Aviso] No se pudo pushear tag latest frontend a GHCR."
-                  echo "==> Sincronización de Frontend con GHCR finalizada."
-                else
-                  echo "==> [Aviso] No se pudo autenticar contra ghcr.io (revisar GITHUB_PAT)."
-                fi
-              fi
-            displayName: 'Build & Push Frontend OCI (ACR + GHCR)'
+              docker push "$(frontendImage):${IMAGE_TAG}"
+            displayName: 'Build & Push Backend y Frontend OCI (GHCR)'
             env:
-              GITHUB_PAT: $(GITHUB_PAT)
+              GHCR_PUSH_TOKEN: $(GHCR_PUSH_TOKEN)
+              GHCR_USERNAME: 'maxivalenzano'
 
   # ----------------------------------------------------------------------------
-  # STAGE 4: ENTREGA CONTINUA (CD) - DESPLIEGUE A VM LINUX EN AZURE
+  # STAGE 4: ENTREGA CONTINUA (CD) - DESPLIEGUE A EC2
   # ----------------------------------------------------------------------------
   - stage: CD
-    displayName: '4. CD: Despliegue en VM Linux'
+    displayName: '4. CD: Despliegue en EC2'
     dependsOn:
       - Versioning
       - Packaging
-    condition: and(succeeded(), in(variables['Build.SourceBranch'], 'refs/heads/main', 'refs/heads/devel', 'refs/tags/v*'), ne(variables['Build.Reason'], 'PullRequest'))
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/devel'), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), and(eq(variables['Build.Reason'], 'Manual'), ${{ eq(parameters.deployDemo, true) }})), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
       - deployment: DeployToVM
-        displayName: 'Desplegar en VM Azure'
+        displayName: 'Desplegar en EC2'
         environment:
           name: $(vmEnvironmentName)
+          resourceName: ec2-devops
           resourceType: VirtualMachine
         strategy:
           runOnce:
             deploy:
               steps:
                 - checkout: self
+                  fetchDepth: 0
 
                 - bash: |
                     set -euo pipefail
-                    echo "========================================================"
-                    echo " Desplegando versión $(SEMVER_TAG) en $(Agent.Name)"
-                    echo " Servidor de registro: $(acrLoginServer)"
-                    echo "========================================================"
-
-                    export IMAGE_TAG="$(SEMVER_TAG)"
-                    export ACR_LOGIN_SERVER="$(acrLoginServer)"
-                    export COMPOSE_PROJECT_NAME="devops-lab"
-
-                    echo "==> Descargando nuevas imágenes desde ACR..."
-                    docker compose pull
-
-                    echo "==> Levantando contenedores actualizados..."
-                    docker compose up -d --remove-orphans
-
-                    echo "==> Refrescando Gateway Nginx para sincronizar DNS interno..."
-                    docker compose restart nginx
-
-                    echo "==> Esperando estabilización de servicios..."
-                    sleep 5
-
-                    echo "==> Ejecutando Smoke Test contra Nginx y Backend..."
-                    curl -fsS http://localhost/ > /dev/null
-                    curl -fsS http://localhost/api/info > /dev/null
-                    echo "==> Despliegue completado y validado exitosamente (HTTP 200 OK)."
-                  displayName: 'Pull y Despliegue con Docker Compose'
+                    bash scripts/deploy-ec2.sh
+                  displayName: 'Desplegar y verificar en EC2'
+                  env:
+                    IMAGE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
+                    BACKEND_IMAGE: $(backendImage)
+                    FRONTEND_IMAGE: $(frontendImage)
+                    APP_URL: $(appUrl)
+                    SOURCE_COMMIT: $(Build.SourceVersion)
+                    GHCR_PULL_TOKEN: $(GHCR_PULL_TOKEN)
+                    GHCR_USERNAME: 'maxivalenzano'
 
                 - bash: |
                     set -euo pipefail
-                    echo "========================================================"
-                    echo " Sincronizando Release, Tags y Metadata en GitHub"
-                    echo "========================================================"
-
-                    git config user.name "Azure DevOps Pipeline"
-                    git config user.email "devops-pipeline@azure.com"
-
-                    # 1. Crear tag local si no existe
-                    if ! git rev-parse "v$(SEMVER_TAG)" >/dev/null 2>&1; then
-                      git tag -a "v$(SEMVER_TAG)" -m "Release v$(SEMVER_TAG) desplegado en Producción"
-                      echo "==> Tag local v$(SEMVER_TAG) creado."
+                    if [[ -z "${GITHUB_RELEASE_TOKEN:-}" || "$GITHUB_RELEASE_TOKEN" == '$('* ]]; then
+                      echo 'GitHub release metadata skipped: GITHUB_RELEASE_TOKEN is not configured.'
+                      exit 0
                     fi
-
-                    # 2. Publicar tag, Release y Metadata si GITHUB_PAT está configurado
-                    if [ -n "${GITHUB_PAT:-}" ] && [ "${GITHUB_PAT}" != "\$(GITHUB_PAT)" ]; then
-                      echo "==> Publicando tag v$(SEMVER_TAG) en GitHub..."
-                      git push "https://${GITHUB_PAT}@github.com/maxivalenzano/dev-ops-clase-2.git" "v$(SEMVER_TAG)" || echo "==> Tag ya existía en GitHub."
-
-                      echo "==> Creando/actualizando GitHub Release oficial para v$(SEMVER_TAG)..."
-
-                      # Extraer historial de commits para generar Changelog dinámico
-                      LAST_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" "v$(SEMVER_TAG)^" 2>/dev/null || echo "")
-                      if [ -n "$LAST_TAG" ]; then
-                        LOG_RANGE="${LAST_TAG}..v$(SEMVER_TAG)"
-                      else
-                        LOG_RANGE="v$(SEMVER_TAG)"
-                      fi
-
-                      echo "==> Extrayendo commits para Changelog en rango: ${LOG_RANGE}"
-                      COMMITS_CHANGELOG=$(git log ${LOG_RANGE} --pretty=format:"* %s ([%h](https://github.com/maxivalenzano/dev-ops-clase-2/commit/%H))" 2>/dev/null || echo "* Despliegue de versión v$(SEMVER_TAG)")
-
-                      RELEASE_JSON=$(jq -n \
-                        --arg tag "v${SEMVER_TAG}" \
-                        --arg name "Release v${SEMVER_TAG}" \
-                        --arg url "http://devops-maxivalenzano.com" \
-                        --arg changelog "$COMMITS_CHANGELOG" \
-                        '{
-                          tag_name: $tag,
-                          name: $name,
-                          body: ("## 🚀 Release " + $tag + "\n\n### 🌐 Despliegue en Vivo\n- **URL**: " + $url + " (o IP directa http://68.211.137.116)\n- **Infraestructura**: Azure VM Ubuntu (Docker Compose + Nginx Gateway + 3 nodos Backend .NET 10 + Frontend React 18 + Redis)\n- **Seguridad & Calidad**: SonarQube Cloud Quality Gate & Trivy Security Scanner\n\n### 📋 Changelog de la versión\n" + $changelog + "\n\n---\n*Despliegue y Release automatizado mediante Azure DevOps Multi-Stage Pipeline.*"),
-                          draft: false,
-                          prerelease: false,
-                          generate_release_notes: true
-                        }')
-                      curl -fsS -X POST \
-                        -H "User-Agent: AzureDevOps-Pipeline" \
-                        -H "Authorization: Bearer ${GITHUB_PAT}" \
-                        -H "Accept: application/vnd.github+json" \
-                        -H "X-GitHub-Api-Version: 2022-11-28" \
-                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/releases \
-                        -d "$RELEASE_JSON" || echo "==> [Aviso] El Release ya existía o API no lo requirió."
-
-                      echo "==> Actualizando Metadata de portada en GitHub (About, Website y Topics)..."
-                      curl -fsS -X PATCH \
-                        -H "User-Agent: AzureDevOps-Pipeline" \
-                        -H "Authorization: Bearer ${GITHUB_PAT}" \
-                        -H "Accept: application/vnd.github+json" \
-                        -H "X-GitHub-Api-Version: 2022-11-28" \
-                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2 \
-                        -d '{
-                          "description": "🚀 DevOps Lab: Microservices (.NET 10 & React 18), Nginx Gateway, automated CI/CD in Azure DevOps with SemVer & Docker Compose.",
-                          "homepage": "http://devops-maxivalenzano.com"
-                        }' || echo "==> [Aviso] No se pudo actualizar descripción/homepage (revisar permisos del token)."
-
-                      curl -fsS -X PUT \
-                        -H "User-Agent: AzureDevOps-Pipeline" \
-                        -H "Authorization: Bearer ${GITHUB_PAT}" \
-                        -H "Accept: application/vnd.github+json" \
-                        -H "X-GitHub-Api-Version: 2022-11-28" \
-                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/topics \
-                        -d '{
-                          "names": ["devops", "azure-devops", "docker-compose", "podman", "dotnet10", "react18", "nginx", "semver", "ci-cd", "microservices"]
-                        }' || echo "==> [Aviso] No se pudieron actualizar los topics."
-
-                      echo "==> Registrando despliegue oficial en GitHub Deployments API..."
-                      COMMIT_SHA="$(Build.SourceVersion)"
-                      DEPLOY_RES=$(curl -s -X POST \
-                        -H "User-Agent: AzureDevOps-Pipeline" \
-                        -H "Authorization: Bearer ${GITHUB_PAT}" \
-                        -H "Accept: application/vnd.github+json" \
-                        -H "X-GitHub-Api-Version: 2022-11-28" \
-                        https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments \
-                        -d "{
-                          \"ref\": \"${COMMIT_SHA}\",
-                          \"environment\": \"Production\",
-                          \"description\": \"Despliegue v${SEMVER_TAG} en Azure VM\",
-                          \"auto_merge\": false,
-                          \"required_contexts\": []
-                        }" || echo "{}")
-
-                      DEPLOY_ID=$(echo "$DEPLOY_RES" | jq -r '.id // empty')
-                      if [ -n "$DEPLOY_ID" ]; then
-                        echo "==> Deployment creado en GitHub con ID: $DEPLOY_ID. Reportando estado 'success'..."
-                        curl -s -X POST \
-                          -H "User-Agent: AzureDevOps-Pipeline" \
-                          -H "Authorization: Bearer ${GITHUB_PAT}" \
-                          -H "Accept: application/vnd.github+json" \
-                          -H "X-GitHub-Api-Version: 2022-11-28" \
-                          https://api.github.com/repos/maxivalenzano/dev-ops-clase-2/deployments/${DEPLOY_ID}/statuses \
-                          -d "{
-                            \"state\": \"success\",
-                            \"environment_url\": \"http://devops-maxivalenzano.com\",
-                            \"description\": \"Despliegue v${SEMVER_TAG} verificado en vivo con Smoke Tests\"
-                          }" > /dev/null
-                        echo "==> GitHub Deployments actualizado exitosamente a 'success'."
-                      else
-                        echo "==> [Aviso] No se pudo crear el deployment en GitHub: $DEPLOY_RES"
-                      fi
-
-                      echo "==> Sincronización con GitHub completada exitosamente."
-                    else
-                      echo "==> [Aviso] GITHUB_PAT no configurado en variables de Azure DevOps. Se omite actualización en GitHub."
-                    fi
-                  displayName: 'Sincronizar Release, Tags y Metadata en GitHub'
+                    python3 scripts/publish-github-release.py
+                  displayName: 'Publicar Release y Deployment en GitHub (opcional)'
                   continueOnError: true
                   env:
-                    GITHUB_PAT: $(GITHUB_PAT)
+                    GITHUB_RELEASE_TOKEN: $(GITHUB_RELEASE_TOKEN)
+                    SEMVER_TAG: $(SEMVER_TAG)
+                    IMAGE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
+                    SOURCE_COMMIT: $(Build.SourceVersion)
+                    APP_URL: $(appUrl)

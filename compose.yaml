@@ -1,9 +1,6 @@
 services:
   # 1. Nginx Gateway & Reverse Proxy
   nginx:
-    build:
-      context: ./nginx
-      dockerfile: Containerfile
     image: nginx:alpine
     container_name: lab-nginx
     restart: always
@@ -26,7 +23,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/frontend:${IMAGE_TAG:-2.0.0}
+    image: ${FRONTEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-frontend}:${IMAGE_TAG:-local}
     container_name: lab-frontend-1
     hostname: frontend-react-1
     restart: unless-stopped
@@ -42,7 +39,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/frontend:${IMAGE_TAG:-2.0.0}
+    image: ${FRONTEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-frontend}:${IMAGE_TAG:-local}
     container_name: lab-frontend-2
     hostname: frontend-react-2
     restart: unless-stopped
@@ -58,7 +55,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/frontend:${IMAGE_TAG:-2.0.0}
+    image: ${FRONTEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-frontend}:${IMAGE_TAG:-local}
     container_name: lab-frontend-3
     hostname: frontend-react-3
     restart: unless-stopped
@@ -75,11 +72,12 @@ services:
     build:
       context: ./backend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/backend:${IMAGE_TAG:-2.0.0}
+    image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-1
     restart: unless-stopped
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-1
@@ -97,11 +95,12 @@ services:
     build:
       context: ./backend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/backend:${IMAGE_TAG:-2.0.0}
+    image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-2
     restart: unless-stopped
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-2
@@ -119,11 +118,12 @@ services:
     build:
       context: ./backend
       dockerfile: Containerfile
-    image: ${ACR_LOGIN_SERVER:-acrdevopsvalenzano.azurecr.io}/backend:${IMAGE_TAG:-2.0.0}
+    image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-3
     restart: unless-stopped
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-3
@@ -141,8 +141,13 @@ services:
     image: redis:7-alpine
     container_name: lab-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     volumes:
       - redis-data:/data
     networks:
@@ -154,8 +159,8 @@ services:
     container_name: lab-portainer
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9443:9443"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9443:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
