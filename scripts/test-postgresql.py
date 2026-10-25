@@ -203,18 +203,36 @@ def main():
             assert http(p3, '/api/tasks/' + marker)['isCompleted'] is False
         record('Three replicas share data and 30 concurrent toggles lose no updates', concurrency)
 
+        # Match the production gateway deadlines so a slow DB failure cannot turn 503 into 504.
+        gateway = RUN + '-gateway'
+        upstream = '\n'.join(f'server {RUN}-p3-{i}:3000 max_fails=2 fail_timeout=10s;' for i in (1, 2, 3))
+        config = work / 'nginx.conf'
+        config.write_text('upstream backends { ' + upstream + ' }\n'
+                          'server { listen 8080; location / { proxy_pass http://backends; '
+                          'proxy_connect_timeout 5s; proxy_read_timeout 5s; '
+                          'proxy_next_upstream error timeout http_503; proxy_next_upstream_tries 3; } }')
+        config.chmod(0o444)
+        command('docker', 'run', '-d', '--name', gateway, '--network', NETWORK,
+                '-p', '127.0.0.1::8080', '-v', f'{config}:/etc/nginx/conf.d/default.conf:ro', 'nginx:alpine')
+        CONTAINERS.append(gateway)
+        binding = json.loads(command('docker', 'inspect', gateway).stdout)[0]
+        gateway_port = binding['NetworkSettings']['Ports']['8080/tcp'][0]['HostPort']
+        wait(lambda: http(gateway_port))
+
         def persistence_and_outage():
             command('docker', 'stop', PG)
             try:
                 http(p3, status=503)
                 http(p3, '/api/tasks', 'POST', {'title': 'Must not use fallback'}, 503)
+                http(gateway_port, status=503)
+                http(gateway_port, '/api/tasks', 'POST', {'title': 'Must not use fallback'}, 503)
                 http(p3, '/api/health')
             finally:
                 command('docker', 'start', PG)
             wait(lambda: http(p3))
             assert http(p3, '/api/tasks/' + marker)['id'] == marker
             assert sql("SELECT count(*) FROM tasks WHERE title='Must not use fallback'").stdout.strip() == '0'
-        record('Database outage returns 503; restart retains data and reconnects', persistence_and_outage)
+        record('Database outage returns 503 through Nginx; restart retains data and reconnects', persistence_and_outage)
 
         def restore_and_down():
             sql(f"UPDATE tasks SET priority=3 WHERE id='{marker}'")
