@@ -1,0 +1,21 @@
+# Build context is repository root, so the pinned local dotnet tool manifest is available.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY .config/dotnet-tools.json .config/dotnet-tools.json
+COPY backend/Backend.csproj backend/Backend.csproj
+RUN dotnet tool restore && dotnet restore backend/Backend.csproj
+COPY backend/ backend/
+ENV ASPNETCORE_ENVIRONMENT=Production
+RUN dotnet ef migrations bundle --project backend/Backend.csproj --self-contained --target-runtime linux-x64 --output /out/efbundle
+RUN mkdir -p /out/sql && \
+    dotnet ef migrations script --project backend/Backend.csproj --idempotent --output /out/sql/forward.sql && \
+    dotnet ef migrations script --project backend/Backend.csproj 20261025000400_004_RequirePriority 20261025000100_001_InitialTasks --output /out/sql/rollback.sql
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runner
+WORKDIR /app
+COPY --from=build --chmod=755 /out/efbundle ./efbundle
+COPY --from=build /out/sql/ /artifacts/
+COPY --chmod=755 backend/migrator-entrypoint.sh ./migrator-entrypoint.sh
+ENV ASPNETCORE_ENVIRONMENT=Production
+USER app
+ENTRYPOINT ["/app/migrator-entrypoint.sh"]

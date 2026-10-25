@@ -32,7 +32,7 @@ public class TaskService : ITaskService
         _database = database ?? throw new ArgumentNullException(nameof(database));
     }
 
-    public async Task<IEnumerable<TaskItem>> GetAllTasksAsync()
+    public async Task<IEnumerable<TaskItem>> GetAllTasksAsync(CancellationToken cancellationToken = default)
     {
         if (_database != null)
         {
@@ -64,7 +64,7 @@ public class TaskService : ITaskService
         return _inMemoryFallback.Values.OrderByDescending(t => t.CreatedAt);
     }
 
-    public async Task<TaskItem?> GetTaskByIdAsync(string id)
+    public async Task<TaskItem?> GetTaskByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -97,14 +97,14 @@ public class TaskService : ITaskService
         return null;
     }
 
-    public async Task<TaskItem> CreateTaskAsync(string title, string nodeName)
+    public async Task<TaskItem> CreateTaskAsync(string title, string nodeName, int priority = 2, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
             throw new ArgumentException("Title cannot be null or whitespace.", nameof(title));
         }
 
-        var task = new TaskItem(title, nodeName);
+        var task = new TaskItem(title, nodeName) { Priority = priority };
 
         if (_database != null)
         {
@@ -124,7 +124,7 @@ public class TaskService : ITaskService
         return task;
     }
 
-    public async Task<TaskItem?> ToggleTaskAsync(string id)
+    public async Task<TaskItem?> ToggleTaskAsync(string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -169,7 +169,7 @@ public class TaskService : ITaskService
         return null;
     }
 
-    public async Task<bool> DeleteTaskAsync(string id)
+    public async Task<bool> DeleteTaskAsync(string id, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id))
         {

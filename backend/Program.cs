@@ -5,7 +5,9 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using Backend.Models;
 using Backend.Services;
-using StackExchange.Redis;
+using Backend.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.Timeouts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,23 +15,20 @@ var portEnv = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portEnv, out var parsedPort) ? parsedPort : 3000;
 var instanceName = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
 
-var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION");
-if (!string.IsNullOrEmpty(redisConnection))
+builder.Services.AddSingleton(new SchemaCompatibility());
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(DatabaseConfiguration.ConnectionString(builder.Configuration)));
+builder.Services.AddScoped<ITaskService, PostgresTaskService>();
+builder.Services.AddRequestTimeouts(options => options.AddPolicy("database", new RequestTimeoutPolicy
 {
-    try
+    Timeout = TimeSpan.FromSeconds(2),
+    TimeoutStatusCode = StatusCodes.Status503ServiceUnavailable,
+    WriteTimeoutResponse = context => context.Response.WriteAsJsonAsync(new
     {
-        var redisOptions = ConfigurationOptions.Parse(redisConnection);
-        redisOptions.AbortOnConnectFail = false;
-        redisOptions.ConnectTimeout = 2000;
-        builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisOptions));
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Warning] Could not configure Redis options for '{redisConnection}': {ex.Message}");
-    }
-}
-builder.Services.AddSingleton<ITaskService, TaskService>();
-
+        status = "DOWN",
+        error = "Database request timed out",
+        storage = "PostgreSQL"
+    }, cancellationToken: CancellationToken.None)
+}));
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 builder.Services.AddCors(options =>
@@ -45,6 +44,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseCors();
+app.UseRequestTimeouts();
 
 // State for chaos and stress testing
 var isHealthy = true;
@@ -105,6 +105,22 @@ app.MapGet("/health", HandleHealth);
 var api = app.MapGroup("/api");
 api.MapGet("/", HandleRoot);
 api.MapGet("/health", HandleHealth);
+api.MapGet("/ready", async (HttpContext context) =>
+{
+    if (!isHealthy) return Results.Json(new { status = "DOWN" }, statusCode: 503);
+    try
+    {
+        if (app.Environment.IsEnvironment("Testing") && context.RequestServices.GetRequiredService<ITaskService>() is TaskService)
+            return Results.Ok(new { status = "UP", storage = "TestMemory" });
+        var db = context.RequestServices.GetRequiredService<AppDbContext>();
+        return Results.Ok(await DatabaseReadiness.CheckAsync(db, context.RequestAborted));
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException || !context.RequestAborted.IsCancellationRequested)
+    {
+        Console.Error.WriteLine($"[{instanceName}] Database readiness failed: {ex.GetType().Name}");
+        return Results.Json(new { status = "DOWN", storage = "PostgreSQL" }, statusCode: 503);
+    }
+}).WithRequestTimeout("database");
 
 // 1. Instance and system information
 api.MapGet("/info", () =>
@@ -231,11 +247,11 @@ api.MapPost("/stress/memory", (HttpRequest request, MemoryStressRequest? body) =
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"[{instanceName}] Memory allocation failed: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Memory allocation failed: {ex.GetType().Name}");
         return Results.Json(new
         {
             error = "Memory allocation failed",
-            message = ex.Message,
+            message = "Database operation failed; retry when readiness is UP",
             instance = instanceName
         }, statusCode: StatusCodes.Status500InternalServerError);
     }
@@ -279,15 +295,16 @@ api.MapPost("/health/toggle", () =>
     });
 });
 
-// 7. Distributed Task Board Endpoints (Redis persistence & Node Signature)
+// 7. Distributed Task Board Endpoints (PostgreSQL persistence & Node Signature)
 var tasksApi = api.MapGroup("/tasks");
+tasksApi.WithRequestTimeout("database");
 
 // GET /api/tasks
-tasksApi.MapGet("/", async (ITaskService taskService) =>
+tasksApi.MapGet("/", async (ITaskService taskService, CancellationToken cancellationToken) =>
 {
     try
     {
-        var tasks = await taskService.GetAllTasksAsync();
+        var tasks = await taskService.GetAllTasksAsync(cancellationToken);
         var taskList = tasks.ToList();
 
         return Results.Ok(new TasksResponse(
@@ -296,24 +313,24 @@ tasksApi.MapGet("/", async (ITaskService taskService) =>
             Tasks: taskList
         ));
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to read tasks: {ex.GetType().Name}");
         return Results.Json(new
         {
-            error = "Failed to communicate with Redis",
-            message = ex.Message,
+            error = "Failed to communicate with PostgreSQL",
+            message = "Database operation failed; retry when readiness is UP",
             servedByNode = instanceName
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // GET /api/tasks/{id}
-tasksApi.MapGet("/{id}", async (string id, ITaskService taskService) =>
+tasksApi.MapGet("/{id}", async (string id, ITaskService taskService, CancellationToken cancellationToken) =>
 {
     try
     {
-        var task = await taskService.GetTaskByIdAsync(id);
+        var task = await taskService.GetTaskByIdAsync(id, cancellationToken);
         if (task is null)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
@@ -321,45 +338,45 @@ tasksApi.MapGet("/{id}", async (string id, ITaskService taskService) =>
 
         return Results.Ok(task);
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-        Console.Error.WriteLine($"[{instanceName}] Query failed: {ex.Message}");
-        return Results.Json(new { error = "Redis query failed", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Query failed: {ex.GetType().Name}");
+        return Results.Json(new { error = "PostgreSQL query failed", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // POST /api/tasks
-tasksApi.MapPost("/", async (CreateTaskRequest? body, ITaskService taskService) =>
+tasksApi.MapPost("/", async (CreateTaskRequest? body, ITaskService taskService, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(body?.Title))
+    if (string.IsNullOrWhiteSpace(body?.Title) || body.Priority is < 1 or > 3)
     {
-        return Results.BadRequest(new { error = "Task title is required" });
+        return Results.BadRequest(new { error = "Task title is required; priority must be between 1 and 3" });
     }
 
     try
     {
-        var task = await taskService.CreateTaskAsync(body.Title, instanceName);
+        var task = await taskService.CreateTaskAsync(body.Title, instanceName, body.Priority ?? 2, cancellationToken);
         Console.WriteLine($"[{instanceName}] Created task '{task.Id}' (Title: {task.Title})");
         return Results.Created($"/api/tasks/{task.Id}", task);
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to save task: {ex.Message}");
+        Console.Error.WriteLine($"[{instanceName}] Failed to save task: {ex.GetType().Name}");
         return Results.Json(new
         {
-            error = "Failed to save task to Redis",
-            message = ex.Message,
+            error = "Failed to save task to PostgreSQL",
+            message = "Database operation failed; retry when readiness is UP",
             servedByNode = instanceName
         }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // PUT /api/tasks/{id}/toggle
-tasksApi.MapPut("/{id}/toggle", async (string id, ITaskService taskService) =>
+tasksApi.MapPut("/{id}/toggle", async (string id, ITaskService taskService, CancellationToken cancellationToken) =>
 {
     try
     {
-        var updatedTask = await taskService.ToggleTaskAsync(id);
+        var updatedTask = await taskService.ToggleTaskAsync(id, cancellationToken);
         if (updatedTask is null)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
@@ -368,19 +385,19 @@ tasksApi.MapPut("/{id}/toggle", async (string id, ITaskService taskService) =>
         Console.WriteLine($"[{instanceName}] Toggled task '{id}' to IsCompleted={updatedTask.IsCompleted}");
         return Results.Ok(updatedTask);
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task: {ex.Message}");
-        return Results.Json(new { error = "Failed to toggle task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Failed to toggle task: {ex.GetType().Name}");
+        return Results.Json(new { error = "Failed to toggle task in PostgreSQL", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 
 // DELETE /api/tasks/{id}
-tasksApi.MapDelete("/{id}", async (string id, ITaskService taskService) =>
+tasksApi.MapDelete("/{id}", async (string id, ITaskService taskService, CancellationToken cancellationToken) =>
 {
     try
     {
-        var deleted = await taskService.DeleteTaskAsync(id);
+        var deleted = await taskService.DeleteTaskAsync(id, cancellationToken);
         if (!deleted)
         {
             return Results.NotFound(new { error = $"Task with id '{id}' not found", servedByNode = instanceName });
@@ -389,10 +406,10 @@ tasksApi.MapDelete("/{id}", async (string id, ITaskService taskService) =>
         Console.WriteLine($"[{instanceName}] Deleted task '{id}'");
         return Results.NoContent();
     }
-    catch (Exception ex)
+    catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
     {
-        Console.Error.WriteLine($"[{instanceName}] Failed to delete task: {ex.Message}");
-        return Results.Json(new { error = "Failed to delete task in Redis", message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        Console.Error.WriteLine($"[{instanceName}] Failed to delete task: {ex.GetType().Name}");
+        return Results.Json(new { error = "Failed to delete task in PostgreSQL", message = "Database unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 });
 

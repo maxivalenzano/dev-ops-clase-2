@@ -1,11 +1,12 @@
 # ==============================================================================
 # Pipeline CI/CD Multi-Stage - DevOps Lab
 # ==============================================================================
-# Flujo desacoplado en 4 Stages:
+# Flujo desacoplado en 5 Stages:
 # 1. Versioning: Cálculo automático de SemVer mediante Conventional Commits.
 # 2. Quality Gate: Pruebas unitarias (.NET 10 xUnit), Cobertura, SonarQube Cloud SAST y Trivy.
 # 3. Packaging: Build y publicación OCI obligatoria en GHCR.
-# 4. CD: Despliegue continuo en EC2 mediante Docker Compose.
+# 4. PostgreSQL: backup, migración EF y comprobación de esquema.
+# 5. CD: Despliegue continuo en EC2 mediante Docker Compose.
 # ==============================================================================
 
 name: $(Date:yyyyMMdd)$(Rev:.r)
@@ -15,6 +16,11 @@ parameters:
     displayName: 'Desplegar manualmente esta rama en EC2 para la demostración'
     type: boolean
     default: false
+  - name: releasePhase
+    displayName: 'Release de la demostración de migraciones'
+    type: string
+    default: P3
+    values: [P1, P2, P3]
 
 trigger:
   branches:
@@ -26,6 +32,7 @@ variables:
   vmEnvironmentName: 'devops-ec2-env'
   backendImage: 'ghcr.io/maxivalenzano/dev-ops-backend'
   frontendImage: 'ghcr.io/maxivalenzano/dev-ops-frontend'
+  migratorImage: 'ghcr.io/maxivalenzano/dev-ops-migrator'
   appUrl: 'http://18.216.227.211'
 
 stages:
@@ -120,6 +127,8 @@ stages:
 
               # Exportar variable de salida para los siguientes stages
               echo "##vso[task.setvariable variable=SEMVER_TAG;isOutput=true]$SEMVER_TAG"
+              MIGRATION_TARGET=$(python3 -c 'import json,sys; print(json.load(open("backend/schema-compatibility.json"))[sys.argv[1]]["targetMigration"])' '${{ parameters.releasePhase }}')
+              echo "##vso[task.setvariable variable=MIGRATION_TARGET;isOutput=true]$MIGRATION_TARGET"
               # Actualizar el nombre visible del build en Azure DevOps
               echo "##vso[build.updatebuildnumber]$SEMVER_TAG"
             name: VersionOutput
@@ -146,7 +155,6 @@ stages:
             inputs:
               packageType: 'sdk'
               version: '10.x'
-            continueOnError: true # No bloquea si el agente de Azure aún no tiene el feed oficial
 
           # 1. Preparar Análisis de SonarQube Cloud (SAST) - Solo en rama devel por limitación de plan Free
           - task: SonarCloudPrepare@4
@@ -206,6 +214,24 @@ stages:
             condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/devel'))
 
       # Job B: Validación de Frontend React y Auditoría de Vulnerabilidades
+      - job: PostgreSQLIntegration
+        displayName: 'PostgreSQL real: P1 → P2 → P3, rollback y restore'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - bash: python3 scripts/test-release-reservation.py
+            displayName: 'Verificar reserva persistente entre PostgreSQL y CD'
+          - bash: bash scripts/test-postgresql.sh
+            displayName: 'Probar imágenes reales y bundle EF en PostgreSQL descartable'
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'TestResults/postgresql.xml'
+              testRunTitle: 'PostgreSQL / EF / compatibilidad de releases'
+              failTaskOnFailedTests: true
+
       - job: FrontendAndSecurity
         displayName: 'Frontend React 18 & Auditoría Trivy'
         pool:
@@ -255,6 +281,7 @@ stages:
               printf '%s' "$GHCR_PUSH_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
               docker build \
                 --platform linux/amd64 \
+                --build-arg 'TASK_RELEASE=${{ parameters.releasePhase }}' \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
                 --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
                 -t "$(backendImage):${IMAGE_TAG}" \
@@ -264,27 +291,104 @@ stages:
               docker build \
                 --platform linux/amd64 \
                 --build-arg "VITE_APP_VERSION=$(SEMVER_TAG)" \
+                --build-arg 'VITE_TASK_RELEASE=${{ parameters.releasePhase }}' \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
                 --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
                 -t "$(frontendImage):${IMAGE_TAG}" \
                 -f frontend/Containerfile frontend
               docker push "$(frontendImage):${IMAGE_TAG}"
-            displayName: 'Build & Push Backend y Frontend OCI (GHCR)'
+
+              docker build --platform linux/amd64 \
+                --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
+                --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
+                -t "$(migratorImage):${IMAGE_TAG}" -f backend/Containerfile.migrator .
+              docker push "$(migratorImage):${IMAGE_TAG}"
+              bash scripts/build-migration-artifacts.sh
+              python3 - <<'PY'
+              import json, os
+              from pathlib import Path
+              phase = os.environ['RELEASE_PHASE']
+              compatibility = json.loads(Path('backend/schema-compatibility.json').read_text())[phase]
+              manifest = dict(compatibility, phase=phase, sourceCommit=os.environ['BUILD_SOURCEVERSION'],
+                              buildId=os.environ['BUILD_BUILDID'], imageTag=os.environ['RELEASE_TAG'])
+              Path('migration-artifacts/release.json').write_text(json.dumps(manifest, indent=2))
+              PY
+            displayName: 'Build & Push Backend, Frontend y Migrador del mismo SHA'
             env:
               GHCR_PUSH_TOKEN: $(GHCR_PUSH_TOKEN)
               GHCR_USERNAME: 'maxivalenzano'
+              RELEASE_PHASE: '${{ parameters.releasePhase }}'
+              RELEASE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
+              MIGRATOR_IMAGE: $(migratorImage)
+          - publish: migration-artifacts
+            artifact: migrations
+            displayName: 'Publicar bundle, SQL de avance/inverso y manifiesto'
 
   # ----------------------------------------------------------------------------
-  # STAGE 4: ENTREGA CONTINUA (CD) - DESPLIEGUE A EC2
+  # STAGE 4: POSTGRESQL - PREPARACIÓN, BACKUP Y MIGRACIONES EF
   # ----------------------------------------------------------------------------
-  - stage: CD
-    displayName: '4. CD: Despliegue en EC2'
+  - stage: PostgreSQL
+    displayName: '4. PostgreSQL: preparación y migraciones EF'
     dependsOn:
       - Versioning
       - Packaging
     condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/devel'), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), and(eq(variables['Build.Reason'], 'Manual'), ${{ eq(parameters.deployDemo, true) }})), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
+      MIGRATION_TARGET: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.MIGRATION_TARGET'] ]
+    jobs:
+      - deployment: PrepareDatabase
+        displayName: 'Reservar release, respaldar, migrar y validar'
+        environment:
+          name: $(vmEnvironmentName)
+          resourceName: ec2-devops
+          resourceType: VirtualMachine
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - download: current
+                  artifact: migrations
+                - bash: |
+                    set -euo pipefail
+                    mkdir -p "$BACKUP_EXPORT_DIR"
+                    bash scripts/prepare-postgresql.sh
+                  displayName: 'Preflight → backup/restore → migrador EF → validación'
+                  env:
+                    IMAGE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
+                    SOURCE_COMMIT: $(Build.SourceVersion)
+                    BUILD_ID: $(Build.BuildId)
+                    RELEASE_PHASE: '${{ parameters.releasePhase }}'
+                    MIGRATION_TARGET: $(MIGRATION_TARGET)
+                    MIGRATOR_IMAGE: $(migratorImage)
+                    BACKEND_IMAGE: $(backendImage)
+                    FRONTEND_IMAGE: $(frontendImage)
+                    GHCR_PULL_TOKEN: $(GHCR_PULL_TOKEN)
+                    GHCR_USERNAME: 'maxivalenzano'
+                    BACKUP_EXPORT_DIR: '$(Pipeline.Workspace)/database-backup/$(Build.BuildId)'
+                - publish: /opt/devops-lab/releases/$(Build.BuildId)
+                  artifact: postgresql-evidence
+                  displayName: 'Publicar recibo sin secretos'
+                  condition: succeededOrFailed()
+                - publish: $(Pipeline.Workspace)/database-backup/$(Build.BuildId)
+                  artifact: database-backup
+                  displayName: 'Guardar copia fuera de EC2 (acceso restringido al build)'
+                  condition: succeededOrFailed()
+
+  # ----------------------------------------------------------------------------
+  # STAGE 5: ENTREGA CONTINUA (CD) - DESPLIEGUE A EC2
+  # ----------------------------------------------------------------------------
+  - stage: CD
+    displayName: '5. CD: Despliegue en EC2'
+    dependsOn:
+      - Versioning
+      - Packaging
+      - PostgreSQL
+    condition: and(succeeded(), eq(dependencies.PostgreSQL.result, 'Succeeded'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/devel'), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), and(eq(variables['Build.Reason'], 'Manual'), ${{ eq(parameters.deployDemo, true) }})), ne(variables['Build.Reason'], 'PullRequest'))
+    variables:
+      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
+      MIGRATION_TARGET: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.MIGRATION_TARGET'] ]
     jobs:
       - deployment: DeployToVM
         displayName: 'Desplegar en EC2'
@@ -309,6 +413,9 @@ stages:
                     FRONTEND_IMAGE: $(frontendImage)
                     APP_URL: $(appUrl)
                     SOURCE_COMMIT: $(Build.SourceVersion)
+                    BUILD_ID: $(Build.BuildId)
+                    RELEASE_PHASE: '${{ parameters.releasePhase }}'
+                    MIGRATION_TARGET: $(MIGRATION_TARGET)
                     GHCR_PULL_TOKEN: $(GHCR_PULL_TOKEN)
                     GHCR_USERNAME: 'maxivalenzano'
 

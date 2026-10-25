@@ -6,11 +6,11 @@ using Xunit;
 
 namespace Backend.Tests;
 
-public class TaskEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class TaskEndpointTests : IClassFixture<TestApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApplicationFactory _factory;
 
-    public TaskEndpointTests(WebApplicationFactory<Program> factory)
+    public TaskEndpointTests(TestApplicationFactory factory)
     {
         _factory = factory;
     }

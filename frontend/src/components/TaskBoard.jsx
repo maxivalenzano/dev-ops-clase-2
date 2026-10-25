@@ -42,12 +42,14 @@ export function getNodeStyle(nodeName) {
 }
 
 export default function TaskBoard({ onLogEvent }) {
+  const hasPriority = import.meta.env.VITE_TASK_RELEASE !== "P1";
   const [tasks, setTasks] = useState([]);
   const [servedByNode, setServedByNode] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  const [priority, setPriority] = useState(2);
   const [errorMessage, setErrorMessage] = useState(null);
   const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
 
@@ -80,7 +82,7 @@ export default function TaskBoard({ onLogEvent }) {
       }
     } catch (err) {
       const latency = Math.round(performance.now() - start);
-      setErrorMessage(`No se pudo sincronizar con Redis / Backend: ${err.message}`);
+      setErrorMessage(`No se pudo sincronizar con PostgreSQL / Backend: ${err.message}`);
       if (onLogEvent) {
         onLogEvent({
           method: 'GET',
@@ -112,7 +114,7 @@ export default function TaskBoard({ onLogEvent }) {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title })
+        body: JSON.stringify(hasPriority ? { title, priority } : { title })
       });
       const latency = Math.round(performance.now() - start);
 
@@ -133,7 +135,7 @@ export default function TaskBoard({ onLogEvent }) {
         });
       }
 
-      // Refrescar lista completa para sincronizar estado de Redis y servedByNode
+      // Refrescar lista completa para sincronizar estado de PostgreSQL y servedByNode
       await fetchTasks();
     } catch (err) {
       const latency = Math.round(performance.now() - start);
@@ -175,7 +177,7 @@ export default function TaskBoard({ onLogEvent }) {
           method: 'PUT',
           url: `/api/tasks/${task.id}/toggle`,
           status: res.status,
-          instance: 'Cluster (Redis)',
+          instance: 'Cluster (PostgreSQL)',
           latency
         });
       }
@@ -205,7 +207,7 @@ export default function TaskBoard({ onLogEvent }) {
           method: 'DELETE',
           url: `/api/tasks/${taskId}`,
           status: res.status,
-          instance: 'Cluster (Redis)',
+          instance: 'Cluster (PostgreSQL)',
           latency
         });
       }
@@ -232,10 +234,10 @@ export default function TaskBoard({ onLogEvent }) {
         <div className="taskboard-header-top">
           <div>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <span>📋</span> Tablero Distribuido con Persistencia Redis
+              <span>📋</span> Tablero Distribuido con Persistencia PostgreSQL
             </h2>
             <p className="card-desc" style={{ marginTop: '0.35rem' }}>
-              Demostración de <strong>persistencia centralizada en memoria</strong> y <strong>balanceo de carga</strong>. Cada solicitud es distribuida por Nginx hacia los nodos backend disponibles y estampada con la firma inmutable de la instancia receptora.
+              Demostración de <strong>persistencia relacional compartida</strong> y <strong>balanceo de carga</strong>. Cada solicitud es distribuida por Nginx hacia los nodos backend disponibles y estampada con la firma inmutable de la instancia receptora.
             </p>
           </div>
 
@@ -245,7 +247,7 @@ export default function TaskBoard({ onLogEvent }) {
               <div
                 className="read-signature-badge"
                 style={{ backgroundColor: servedStyle.bg, borderColor: servedStyle.border }}
-                title="Instancia backend específica que atendió esta lectura de Redis (Nginx balancea cada consulta)"
+                title="Instancia backend específica que atendió esta lectura de PostgreSQL (Nginx balancea cada consulta)"
               >
                 <span className="badge-dot" style={{ backgroundColor: servedStyle.text }} />
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Consulta servida por:</span>
@@ -259,7 +261,7 @@ export default function TaskBoard({ onLogEvent }) {
               onClick={fetchTasks}
               disabled={isLoading}
               style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}
-              title="Re-consultar tareas en Redis"
+              title="Re-consultar tareas en PostgreSQL"
             >
               {isLoading ? '⏳ Sincronizando...' : '🔄 Recargar Tareas'}
             </button>
@@ -269,7 +271,7 @@ export default function TaskBoard({ onLogEvent }) {
         {/* Contadores de Estado de Tareas */}
         <div className="taskboard-stats-row">
           <div className="task-stat-item">
-            <span className="task-stat-label">Almacenadas en Redis</span>
+            <span className="task-stat-label">Almacenadas en PostgreSQL</span>
             <span className="task-stat-num mono">{totalCount}</span>
           </div>
           <div className="task-stat-item">
@@ -304,12 +306,17 @@ export default function TaskBoard({ onLogEvent }) {
             onChange={(e) => setNewTitle(e.target.value)}
             disabled={isSubmitting}
           />
+          {hasPriority && <select aria-label="Prioridad" value={priority} onChange={(e) => setPriority(Number(e.target.value))} disabled={isSubmitting}>
+            <option value={1}>Baja</option>
+            <option value={2}>Media</option>
+            <option value={3}>Alta</option>
+          </select>}
           <button type="submit" className="primary" disabled={isSubmitting || !newTitle.trim()}>
-            {isSubmitting ? '⏳ Guardando en Redis...' : '➕ Guardar en Cluster'}
+            {isSubmitting ? '⏳ Guardando en PostgreSQL...' : '➕ Guardar en Cluster'}
           </button>
         </form>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          💡 Cada tarea se persiste en Redis y queda sellada con el nodo backend que atendió el <code className="mono">POST</code> (<code className="mono">createdByNode</code>). En ChaosNet Lab, los datos se preservan ante caídas de réplicas.
+          💡 Cada tarea se persiste en PostgreSQL y queda sellada con el nodo backend que atendió el <code className="mono">POST</code> (<code className="mono">createdByNode</code>). En ChaosNet Lab, los datos se preservan ante caídas de réplicas.
         </p>
       </div>
 
@@ -344,7 +351,7 @@ export default function TaskBoard({ onLogEvent }) {
           <h3 className="empty-title">No hay tareas en esta vista</h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '480px' }}>
             {tasks.length === 0
-              ? 'El almacén en Redis no contiene registros aún. Agrega la primera tarea arriba para comprobar qué nodo backend procesa la escritura y observar la firma generada.'
+              ? 'El almacén en PostgreSQL no contiene registros aún. Agrega la primera tarea arriba para comprobar qué nodo backend procesa la escritura y observar la firma generada.'
               : 'No existen tareas que coincidan con el filtro seleccionado.'}
           </p>
         </div>
@@ -377,6 +384,7 @@ export default function TaskBoard({ onLogEvent }) {
                   <div className="task-content">
                     <div className="task-title-row">
                       <span className="task-title">{task.title}</span>
+                      {hasPriority && <span className="node-badge">{["", "Baja", "Media", "Alta"][task.priority ?? 2]}</span>}
                     </div>
 
                     <div className="task-metadata">
@@ -400,7 +408,7 @@ export default function TaskBoard({ onLogEvent }) {
                 <div className="task-card-actions">
                   <button
                     className="delete-task-btn"
-                    title="Eliminar tarea de Redis"
+                    title="Eliminar tarea de PostgreSQL"
                     onClick={() => handleDeleteTask(task.id)}
                   >
                     🗑️

@@ -1,4 +1,4 @@
-# 🚀 Clúster de Microservicios, Redis y DevSecOps Lab
+# 🚀 Clúster de Microservicios, PostgreSQL y DevSecOps Lab
 ### UTN FRRe | DevOps – Cultura, Herramientas y Procesos | Ciclo Lectivo 2026
 
 [![Deployment target](https://img.shields.io/badge/Destino-EC2%20Ubuntu-orange?style=flat&logo=amazonaws&logoColor=white)]
@@ -20,8 +20,8 @@
 ## 🌟 Enlaces y destino de despliegue
 
 * 🎓 **Presentación Técnica y Defensa Oficial**: [GitHub Pages — Presentación Online](https://maxivalenzano.github.io/dev-ops-clase-2/presentacion/)
-* ☁️ **Aplicación en EC2**: [http://18.216.227.211](http://18.216.227.211), versión `3.0.0-build.81`; nueve contenedores están en estado running. La IP pública puede cambiar.
-* 🛠️ **Estado de entrega**: CI/CD 81 completó sus cuatro etapas; Release `v3.0.0` y Deployment `ec2-demo` se publicaron correctamente. Un rollback manual y una nueva entrega conservaron una tarea Redis de prueba, incluso tras reiniciar Ubuntu; las verificaciones post-reinicio pasaron.
+* ☁️ **Aplicación en EC2**: [http://18.216.227.211](http://18.216.227.211), release `3.1.6-build.91` (P3). La IP pública puede cambiar.
+* 🛠️ **Estado de despliegue**: P1, P2 y P3 se desplegaron sucesivamente; P3 está activa con PostgreSQL. Pasaron las pruebas manuales de resiliencia, backup/restore off-host y rollback P3→P1→P3; Redis se conserva como legado.
 * 📄 **Informe Académico Formal del TP 1**: [INFORME_TP1.md](INFORME_TP1.md)
 * 🛡️ **Dashboard de Calidad y Seguridad**: [SonarQube Cloud](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps)
 * 📚 **Documentación Técnica y Bitácora**: [VitePress Docs](https://maxivalenzano.github.io/dev-ops-clase-2/)
@@ -30,7 +30,7 @@
 
 ## 🗺️ 1. Mapa Conceptual de la Arquitectura (Primer Pantallazo)
 
-El siguiente diagrama ilustra cómo interactúan el cliente, el gateway Nginx, el clúster de frontend, el clúster de backend y la persistencia centralizada en Redis:
+El diagrama muestra la topología activa desde P1: PostgreSQL es la fuente de verdad del tablero. El servicio y volumen Redis se conservan como legado y no reciben nuevas escrituras.
 
 ```mermaid
 graph TD
@@ -48,8 +48,9 @@ graph TD
         B3["backend-3<br/>(Port 3000 | 128MB RAM)"]
     end
 
-    subgraph Database ["💾 Base de Datos en Memoria & Caché"]
-        Redis[("⚡ lab-redis (Redis 7 Alpine)<br/>Persistencia en volumen: redis-data")]
+    subgraph Database ["💾 Persistencia del tablero (P1)"]
+        PostgreSQL[("🐘 lab-postgres (PostgreSQL 17.11)<br/>Volumen: postgres-data")]
+        Redis[("⚡ lab-redis legado<br/>Volumen: redis-data")]
     end
 
     subgraph Observability ["📊 Observabilidad y Monitoreo"]
@@ -58,14 +59,14 @@ graph TD
 
     Nginx -->|"Ruta / (Archivos Estáticos SPA)"| FrontCluster
     Nginx -->|"Ruta /api/ (Endpoints REST)"| BackCluster
-    BackCluster -->|"Conexión TCP Asíncrona (Puerto 6379)"| Redis
+    BackCluster -->|"Conexión privada PostgreSQL 5432"| PostgreSQL
 ```
 
 ---
 
-## 🏛️ 2. Resumen del Clúster (9 Contenedores en Red Aislada)
+## 🏛️ 2. Topología desplegada y persistencia
 
-La aplicación se compone de **9 contenedores** conectados por la red bridge `lab-network`. En local se ejecuta con Podman Compose; el destino en la nube es Ubuntu EC2 con Docker Compose.
+La aplicación tiene tres réplicas frontend y tres backend. PostgreSQL corre como infraestructura persistente de un proyecto Compose separado; el stage P1 informó diez servicios healthy y la verificación CD pasó. Redis se conserva como legado fuera del flujo de escritura actual.
 
 | Contenedor | Rol en el Sistema | Tecnología | Puerto Interno | Límites de Recursos |
 | :--- | :--- | :--- | :---: | :---: |
@@ -76,10 +77,11 @@ La aplicación se compone de **9 contenedores** conectados por la red bridge `la
 | **`lab-backend-1`** | Réplica 1 de la API REST (`backend-dotnet-1`) | .NET 10 C# Minimal API | `3000` | 0.50 CPU / 128 MB RAM |
 | **`lab-backend-2`** | Réplica 2 de la API REST (`backend-dotnet-2`) | .NET 10 C# Minimal API | `3000` | 0.50 CPU / 128 MB RAM |
 | **`lab-backend-3`** | Réplica 3 de la API REST (`backend-dotnet-3`) | .NET 10 C# Minimal API | `3000` | 0.50 CPU / 128 MB RAM |
-| **`lab-redis`** | Almacén de estado de tareas | Redis 7 Alpine | `6379:6379` | Volumen `redis-data` |
+| **`lab-redis`** | Almacén legado previo a P1, sin nuevas escrituras | Redis 7 Alpine | Interno, no publicar | Volumen `redis-data` conservado |
+| **`lab-postgres`** | Fuente de verdad activa desde P1 | PostgreSQL 17.11 | Interno, sin puerto público | Volumen `postgres-data` |
 | **`lab-portainer`** | Panel Gráfico de Gestión de Contenedores | Portainer CE | `127.0.0.1:9000:9000`, `127.0.0.1:9443:9443` en EC2 | Volumen `portainer-data` |
 
-> Las réplicas comparten una instancia Redis en el volumen `redis-data`. El balanceo y los reintentos de Nginx permiten experimentar con fallos de contenedores dentro de la misma máquina.
+> PostgreSQL es la fuente de verdad del tablero desde P1. La inspección previa al corte encontró Redis vacío; Redis y su volumen se conservan como legado. Mantenerlos no sincroniza cambios posteriores.
 
 ---
 
@@ -87,9 +89,9 @@ La aplicación se compone de **9 contenedores** conectados por la red bridge `la
 
 Al abrir la aplicación encontrarás dos modos principales accesibles desde la barra superior. En local, se accede en `http://localhost`; la demo en EC2 está disponible por HTTP en [http://18.216.227.211](http://18.216.227.211). Dominio y HTTPS de aplicación son opcionales y todavía no están validados.
 
-### 📋 Modo 1: Tablero Distribuido sobre Redis ("Node Signature Board")
+### 📋 Modo 1: Tablero Distribuido ("Node Signature Board")
 
-Este módulo gestiona tareas en tiempo real demostrando cómo múltiples nodos backend comparten el mismo estado centralizado en Redis sin perder datos.
+El tablero comparte tareas entre sus tres backends. Desde P1, la API las persiste en PostgreSQL mediante EF Core.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -97,7 +99,7 @@ Este módulo gestiona tareas en tiempo real demostrando cómo múltiples nodos b
 ├────────────────────────────────────────────────────────────────────────┤
 │  [ Escribe una nueva tarea... ]   [ + Guardar en Clúster ]             │
 │                                                                        │
-│  Tareas en Redis (3):                                                  │
+│  Tareas en PostgreSQL (3):                                             │
 │  [x] Configurar Nginx Reverse Proxy      🏷️ Creado por: backend-dotnet-1 │
 │  [ ] Validar Failover con docker stop    🏷️ Creado por: backend-dotnet-3 │
 │  [ ] Pruebas SAST con SonarQube Cloud    🏷️ Creado por: backend-dotnet-2 │
@@ -111,7 +113,7 @@ Este módulo gestiona tareas en tiempo real demostrando cómo múltiples nodos b
 2. **Consultar y Actualizar:**
    * Al recargar la página (F5), Nginx balanceará la lectura (`GET /api/tasks`) a otro nodo.
    * El banner superior te indicará en vivo: **"Última lectura atendida por: [Nodo]"**.
-   * Todas las tareas se muestran juntas porque la fuente de verdad es **Redis**.
+   * Todas las tareas se muestran juntas porque las réplicas usan PostgreSQL como persistencia compartida.
 3. **Completar o Eliminar:**
    * Haz clic en el checkbox para tachar una tarea (`PUT /api/tasks/{id}/toggle`) o en el cesto de basura para borrarla (`DELETE /api/tasks/{id}`).
 4. **🔥 Prueba de Resiliencia en Vivo:**
@@ -134,9 +136,9 @@ Haz clic en la pestaña **Laboratorio de Caos** para probar la robustez de Nginx
 
 ---
 
-## 🔄 4. Mapa Conceptual del Pipeline CI/CD & DevSecOps
+## 🔄 4. Pipeline CI/CD y DevSecOps
 
-El pipeline automatizado en **Azure DevOps** (`azure-pipelines.yml`) consta de **4 etapas (Stages)** diseñadas bajo el principio **Fail-Fast**:
+El pipeline actual de **Azure DevOps** (`azure-pipelines.yml`) tiene cinco stages y bloquea el despliegue cuando falla QualityGate o PostgreSQL:
 
 ```mermaid
 flowchart LR
@@ -144,13 +146,13 @@ flowchart LR
     GitRepo -->|"Webhook Trigger"| Pipeline["⚡ Azure Pipelines Multi-Stage"]
 
     subgraph S1 ["Stage 1: Versioning"]
-        SemVer["🏷️ Cálculo SemVer Automático<br/>(Conventional Commits)"]
+        SemVer["🏷️ Versión, SHA<br/>y migración objetivo"]
     end
 
     subgraph S2 ["Stage 2: Quality Gate & SAST"]
         direction TB
-        Tests["🧪 42 Tests Unitarios (.NET 10)"]
-        Coverage["📊 Cobertura Dual (OpenCover + Cobertura)"]
+        Tests["🧪 Tests .NET + integración PostgreSQL"]
+        Coverage["📊 Cobertura"]
         Sonar["🛡️ SonarQube Cloud SAST"]
         Trivy["🔍 Trivy Container Scanner"]
         Gate{"Compuerta de Calidad<br/>(Quality Gate)"}
@@ -161,33 +163,33 @@ flowchart LR
 
     subgraph S3 ["Stage 3: Packaging OCI"]
         direction TB
-        GHCR["📦 GitHub Container Registry (GHCR)"]
+        GHCR["📦 Backend, frontend y migrador<br/>mismo SHA en GHCR"]
     end
 
-    subgraph S4 ["Stage 4: Continuous Delivery (CD)"]
+    subgraph S4 ["Stage 4: PostgreSQL"]
         direction TB
-        VM["☁️ Ubuntu EC2 (agente activo)"]
-        Smoke["🩺 Smoke Tests HTTP 200 OK"]
-        Release["🚀 GitHub Releases & Changelog"]
+        DB["☁️ EC2: backup, migración<br/>y validación de esquema"]
+    end
+    subgraph S5 ["Stage 5: CD"]
+        VM["☁️ EC2: despliegue de aplicación"]
+        Smoke["🩺 Readiness y verificación"]
     end
 
     Pipeline --> S1
     S1 --> S2
     Gate -->|"Quality Gate: PASA"| S3
     Gate -.->|"Fallo de Calidad"| Abort["❌ Abortar Pipeline (Fail-Fast)"]
-    S3 --> S4
-    VM --> Smoke --> Release
+    S3 --> S4 --> S5
+    VM --> Smoke
 ```
 
-* **Stage 1 (Versioning):** Analiza el historial de commits y calcula la versión semántica `MAJOR.MINOR.PATCH` (`SEMVER_TAG`); la ejecución 81 produjo `3.0.0-build.81` para el commit `3bbd09d848338f63efe6900c05a7004fde4281be`.
-* **Stage 2 (Quality Gate & SAST):**
-  * Ejecuta **42 pruebas unitarias en .NET 10** usando xUnit y Moq.
-  * Evalúa el **Quality Gate en SonarQube Cloud**: si no cumple el estándar de seguridad o cobertura, el build se detiene inmediatamente.
-  * Audita imágenes y dependencias con **Trivy Scanner**.
-* **Stage 3 (Packaging):** El pipeline construyó y publicó las imágenes backend/frontend en GHCR con la misma etiqueta `3.0.0-build.81` y el mismo SHA de commit.
-* **Stage 4 (Continuous Deployment):** El pipeline desplegó en el Environment `devops-ec2-env`, recurso `ec2-devops`, mediante el agente activo bajo `ubuntu`; los cuatro stages finalizaron correctamente.
+1. **Versioning** define etiqueta, SHA y migración objetivo.
+2. **QualityGate** ejecuta análisis y pruebas con PostgreSQL descartable; un fallo bloquea Packaging y despliegue.
+3. **Packaging** publica backend, frontend y migrador del mismo SHA.
+4. **PostgreSQL** respalda y migra el esquema en EC2, y publica evidencia.
+5. **CD** despliega la aplicación compatible y verifica readiness.
 
-La publicación de GitHub Release/Deployment se completó: Release `v3.0.0` y Deployment `ec2-demo` se publicaron correctamente con `scripts/publish-github-release.py`.
+P1, P2 y P3 completaron los cinco stages en secuencia; P3 es la versión activa. Build91 reportó 49/49 unitarias y 13/13 integración, incluyendo 503 por Nginx al detener PostgreSQL. También pasaron la prueba manual de resiliencia y el rollback P3→P1→P3.
 
 ### Configuración de Azure DevOps
 
@@ -195,76 +197,49 @@ Los secretos `GHCR_PUSH_TOKEN`, `GHCR_PULL_TOKEN` y `GITHUB_RELEASE_TOKEN` ya es
 
 ---
 
-## ⚡ 5. Cómo Ejecutar el Proyecto en Local
+## ⚡ 5. Ejecutar y desplegar
 
-### Prerrequisitos
-* [Podman](https://podman.io/) con el proveedor Compose instalado.
-* [.NET 10 SDK](https://dotnet.microsoft.com/) (opcional, solo para compilar el backend sin contenedor).
-* [Node.js 20+](https://nodejs.org/) (opcional, solo para desarrollo frontend local).
+### Despliegue en EC2 mediante Azure Pipelines
 
-### Ejecución local con Podman Compose
+El flujo tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL → CD`. Para solicitar un despliegue manual, iniciar una ejecución desde Azure DevOps con `deployDemo=true` y elegir `releasePhase`. El default es P3 para no retroceder releases; una primera instalación debe seleccionar P1 explícitamente. P3 (`3.1.6-build.91`) está activo; ver [estado y evidencia en la bitácora](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
-En la raíz del proyecto, ejecuta un solo comando:
+### Pruebas locales de integración
+
+En un entorno Linux con Docker disponible, ejecuta el script de integración. Construye las imágenes P1/P2/P3 y el migrador, y prueba contra PostgreSQL descartable; no usa la base EC2:
 
 ```bash
-# Construir y levantar los 9 contenedores en segundo plano
-podman compose up --build -d
+bash scripts/test-postgresql.sh
 ```
 
-Verifica el estado de los contenedores:
-```bash
-podman compose ps
-```
-
-Abre tu navegador en:
-* **Aplicación Web**: `http://localhost` (o `http://localhost:8080` si defines `PORT=8080`)
-* **Portainer CE**: `http://localhost:9000`
-
-Para detener el clúster:
-```bash
-podman compose down
-```
-
----
-
----
-
-## 🧪 6. Ejecución de Pruebas Unitarias
-
-El proyecto cuenta con una suite automatizada de **42 pruebas unitarias** que validan modelos de dominio, validaciones de entrada, persistencia simulada con mocks de Redis (`Moq`), endpoints de salud y escenarios de caos.
-
-Para ejecutarlas localmente:
+La suite backend local se ejecuta con [.NET 10 SDK](https://dotnet.microsoft.com/):
 
 ```bash
 dotnet test tests/Backend.Tests/Backend.Tests.csproj
 ```
 
-**Salida esperada:**
-```text
-Passed!  - Failed: 0, Passed: 42, Skipped: 0, Total: 42, Duration: 15 s
-```
+Podman sobre Windows/WSL presenta una limitación de red observada en este entorno y no está validado como ruta para ejecutar este stack. Para la integración PostgreSQL, usar Linux y Docker.
+
+---
+
+---
+
+## 🧪 6. Estado de pruebas
+
+En el commit `07e6c9a`, las pruebas backend locales pasaron **49/49**. El build 87 reportó 46 unitarias y 13 de integración aprobadas. Builds 89 y 90 bloquearon la promoción por fallo de gateway; build91 pasó sus cinco stages, con 49 unitarias y 13 de integración, incluido el 503 vía Nginx. También pasaron las pruebas manuales de resiliencia, backup/restore off-host y rollback P3→P1→P3; consultar la [bitácora](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
 ---
 
 ## 📚 7. Documentación Técnica y Bitácora del Proyecto
 
-### Estado de la migración a EC2
+La integración PostgreSQL/EF Core está desplegada hasta P3. Consulta el [plan](docs/backend/plan-integracion-postgresql-ef.md), el [guion de migraciones](docs/backend/migraciones-demo.md) y la [bitácora con evidencia por build](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
-El despliegue se prepara en `/opt/devops-lab`. `scripts/setup-ec2.sh` prepara el host, `scripts/deploy-ec2.sh` descarga y ejecuta la versión publicada, y `scripts/verify-deployment.sh` comprueba el resultado. Compose recibe `BACKEND_IMAGE` y `FRONTEND_IMAGE` como nombres de imagen y `IMAGE_TAG` como etiqueta común de la versión.
+### Estado actual de EC2
 
-Compose y los scripts ya están copiados a `/opt/devops-lab`. Redis permanece dentro de la red privada de Compose, sin puerto publicado al host, con persistencia AOF y comprobación de salud. Portainer se limita a `127.0.0.1:9000` y `127.0.0.1:9443`; para acceder a HTTPS desde Windows:
+P3 (`3.1.6-build.91`) está activo con esquema `20261025000400_004_RequirePriority`. Las fases P1, P2 y P3 se desplegaron sucesivamente y completaron los cinco stages; el build91 aplicó el backfill y preservó los datos del marcador. Redis se conserva como legado y no recibe escrituras nuevas. También se verificaron resiliencia, restore off-host y rollback P3→P1→P3.
 
-```powershell
-ssh -i "C:\Users\m.valenzano\Downloads\vm-dev-ops-aws.pem" -L 9443:127.0.0.1:9443 ubuntu@18.216.227.211
-```
+P1 (`3.1.1-build.87`) inicializó PostgreSQL y P2 (`3.1.2-build.88`) avanzó el esquema. P3 (`3.1.6-build.91`) aplicó backfill y restricciones; el rollback real a P1 y el retorno a P3 conservaron el marcador con prioridad 3. Luego se eliminó por API y el tablero quedó vacío. Un backup P3 descargado desde Azure Pipelines se verificó por SHA-256 y se restauró en una base separada; el tiempo medido fue 0,462 s en esta prueba, no un RTO general.
 
-Luego abrir `https://localhost:9443`. El acceso de administrador de Portainer está guardado localmente fuera del repositorio; el helper privado para consultarlo no se enlaza desde la documentación publicada y aquí no se incluyen secretos.
-
-La primera entrega `3.0.0` está disponible en [http://18.216.227.211](http://18.216.227.211), con nueve contenedores ejecutándose. El agente `ec2-devops` está registrado en `devops-ec2-env` y activo bajo `ubuntu`; las credenciales GHCR y los secretos del pipeline están configurados. Las verificaciones del despliegue inicial pasaron.
-
-La versión activa `3.0.0-build.81` corresponde al commit `3bbd09d848338f63efe6900c05a7004fde4281be`; las imágenes backend y frontend llevan ese mismo SHA. Se validaron HTTP 200 local y público, persistencia Redis tras reiniciar Redis, recrear un backend, rollback manual a `3.0.0`, nueva entrega y reinicio real de Ubuntu. El cambio de `boot_id` confirmó el reinicio; después, Docker y el servicio del agente seguían activos (`Listening for Jobs`), los nueve contenedores estaban arriba y pasaron CRUD/Redis, 30 solicitudes distribuidas entre tres backends y endpoints públicos 200. Una tarea marcador sobrevivió rollback, entrega y reinicio; luego se eliminó y el tablero quedó vacío (`totalCount=0`). También pasaron failover frontend/backend y 12 respuestas `frontend-info` atendidas por tres frontends. Portainer CE 2.45.3 quedó inicializado; su API autenticada confirma nueve contenedores.
-
-CI 81 terminó correctamente con los cuatro stages; también pasaron las 42 pruebas backend y los builds frontend y documentación. `Demo=true` sigue disponible para ejecuciones manuales en ramas feature, con despliegues automáticos de `main` y `devel`. La demo oficial usa HTTP por IP; dominio y HTTPS de aplicación son opcionales y no se han ejecutado. Podman en WSL no está validado; el historial está en [docs/bitacora/2026-10-25-migracion-aws-ec2.md](docs/bitacora/2026-10-25-migracion-aws-ec2.md).
+Las entradas anteriores sobre `3.0.0`, build81, cuatro stages y Redis describen el historial pre-PostgreSQL; no son el estado activo.
 
 El repositorio cuenta con un sitio web de documentación integral generado con **VitePress**:
 

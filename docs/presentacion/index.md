@@ -3,7 +3,9 @@
 > **Laboratorio de contenedores, CI/CD y gobernanza**
 > **Autor:** Maxi Valenzano — **Cátedra:** DevOps (UTN FRRe) — **Año:** 2026
 
-> **Estado actual (25/10/2026):** Esta presentación conserva el diseño académico e histórico de la etapa en Azure. El estado vigente usa Podman Compose en local y Docker Compose en Ubuntu EC2. CI/CD 81 completó sus cuatro etapas; la versión activa `3.0.0-build.81` está publicada en GHCR y desplegada en EC2 en [http://18.216.227.211](http://18.216.227.211). Se validó la persistencia de una tarea tras rollback, nueva entrega y reinicio real del host. Dominio y HTTPS de aplicación son opcionales y no se ejecutaron; Podman en WSL no está validado.
+> **Estado actual (25/10/2026):** P1, P2 y P3 se desplegaron sucesivamente; P3 (`3.1.6-build.91`) es la versión activa en EC2 con PostgreSQL, esquema 004. El pipeline actual tiene cinco stages y pasó en los tres releases. Build91 aprobó 49/49 pruebas unitarias y 13/13 de integración, incluido 503 vía Nginx al caer PostgreSQL. También pasaron resiliencia, restore off-host y rollback P3→P1→P3. La demo corre en una VM sin alta disponibilidad; Podman en Windows/WSL no está validado.
+
+**Guion principal para la exposición:** [Migraciones PostgreSQL con EF Core — guion de 15 minutos](/backend/migraciones-demo).
 
 ---
 
@@ -11,17 +13,17 @@
 
 | Recurso | Enlace / Endpoint | Descripción |
 | :--- | :--- | :--- |
-| ☁️ **Destino de nube** | Ubuntu EC2: `18.216.227.211` | Aplicación `3.0.0-build.81` activa; nueve contenedores en ejecución |
+| ☁️ **Destino de nube** | Ubuntu EC2: `18.216.227.211` | P3 `3.1.6-build.91` activa; PostgreSQL esquema 004 |
 | 🛡️ **SonarQube Cloud SAST** | [SonarCloud DevOps Dashboard](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps) | Quality Gate, análisis estático, cobertura y vulnerabilidades |
-| ⚙️ **Azure Pipelines CI/CD** | [Azure DevOps Pipeline](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel) | Pipeline desacoplado en 4 stages automatizados |
-| 📦 **GitHub Packages (GHCR)** | [dev-ops-backend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend) / [frontend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-frontend) | Destino previsto para sustituir ACR en el pipeline |
+| ⚙️ **Azure Pipelines CI/CD** | [Azure DevOps build 91](https://dev.azure.com/maxivalenzano/DevOps/_build/results?buildId=91) | Build P3 completado: Versioning, QualityGate, Packaging, PostgreSQL y CD |
+| 📦 **GitHub Packages (GHCR)** | [backend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend) / [frontend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-frontend) / [migrator](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-migrator) | Imágenes OCI publicadas con la etiqueta del release y SHA correspondiente |
 | 🏷️ **GitHub Releases & Changelog** | [Releases Oficiales](https://github.com/maxivalenzano/dev-ops-clase-2/releases) | Historial de versiones y notas de despliegue automatizadas |
 
 ---
 
 ## 🗺️ Mapa Conceptual de Alto Nivel (End-to-End)
 
-El siguiente mapa conceptual ilustra el flujo completo de vida del software: desde el desarrollo local y el versionado con Conventional Commits, pasando por el pipeline de 4 stages en Azure DevOps, hasta el empaquetado OCI dual y el despliegue continuo en la Máquina Virtual de Azure con observabilidad visual vía Portainer.
+El siguiente mapa conceptual conserva el flujo académico e histórico del laboratorio; para el estado operativo actual, el pipeline usa cinco stages y PostgreSQL en EC2.
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -370,7 +372,11 @@ Uso Interno de Producción:                                  Uso Público y Comu
 
 ---
 
-## 6. Los 4 Stages del Pipeline CI/CD (DevSecOps)
+## 6. Pipeline CI/CD actual y diseño histórico
+
+El pipeline actual validado tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL → CD`. P1, P2 y P3 completaron el flujo de manera sucesiva; P3 está activo. Build91 pasó 49 pruebas unitarias y 13 de integración, incluido 503 por Nginx con PostgreSQL detenido. La verificación manual de resiliencia, restore off-host y rollback P3→P1→P3 también pasó. El detalle por ejecución está en la [bitácora PostgreSQL/EF](/bitacora/2026-10-25-postgresql-ef-migraciones).
+
+El diagrama y desglose que siguen describen el pipeline anterior de cuatro stages en Azure/ACR y quedan como contexto histórico del trabajo académico, no como arquitectura actualmente desplegada.
 
 El archivo [`azure-pipelines.yml`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/main/azure-pipelines.yml) implementa un flujo desacoplado en **4 Stages secuenciales e independientes**:
 
@@ -520,7 +526,7 @@ Portainer CE es la herramienta idónea para **demostrar en vivo ante la cátedra
 | **Microservicios y Clúster** | 10 contenedores orquestados con Docker Compose | 3x Frontend (React 18), 3x Backend (.NET 10), Redis 7, Nginx, Portainer |
 | **Alta Disponibilidad** | Nginx Gateway con upstream Round Robin y Failover | `proxy_next_upstream`, timeouts 5s, páginas de error JSON estructuradas |
 | **Pruebas de Caos (Chaos)** | Endpoints de estrés de CPU, fuga de RAM y health | OOM Killer forzado a 128 MB, timeouts forzados, failover en vivo |
-| **CI/CD Automatizado** | Azure DevOps Multi-Stage Pipeline (4 Stages) | Versionado SemVer automático, empaquetado OCI, CD en VM con Smoke Tests |
+| **CI/CD Automatizado (actual)** | Azure DevOps Multi-Stage Pipeline (5 Stages) | Versionado, QualityGate, Packaging, PostgreSQL y CD a EC2 |
 | **Calidad y Seguridad (SAST)** | SonarQube Cloud + Aquasecurity Trivy + xUnit | 42 tests unitarios, cobertura Cobertura/OpenCover, Quality Gate bloqueante |
 | **Gestión de Artefactos** | Registro dual: Azure ACR + GitHub Packages (GHCR) | Etiquetas SemVer inmutables (`SEMVER_TAG`) y `latest` publicadas en paralelo |
 | **Gobernanza y Releases** | Automatización completa en GitHub vía API REST | Tags automáticos, GitHub Releases con changelog dinámico, GitHub Deployments |

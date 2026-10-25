@@ -214,8 +214,8 @@ export default function App() {
               ⚙️ API .NET Replicas
             </span>
             <span className="arch-sep">➔</span>
-            <span className="arch-pill" title="Almacén en memoria persistente y centralizado">
-              ⚡ Redis Cache
+            <span className="arch-pill" title="Base relacional compartida entre las réplicas">
+              ⚡ PostgreSQL
             </span>
           </div>
         </div>
@@ -268,12 +268,12 @@ export default function App() {
         <button
           className={`tab-button ${activeTab === 'board' ? 'active' : ''}`}
           onClick={() => setActiveTab('board')}
-          title="Gestión de tareas sincronizadas en Redis con firma de nodo"
+          title="Gestión de tareas sincronizadas en PostgreSQL con firma de nodo"
         >
           <span>📋</span>
           <div style={{ textAlign: 'left' }}>
             <div>Tablero Distribuido</div>
-            <span className="tab-sub">Persistencia & Balanceo Redis</span>
+            <span className="tab-sub">Persistencia & Balanceo PostgreSQL</span>
           </div>
         </button>
         <button

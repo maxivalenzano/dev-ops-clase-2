@@ -75,13 +75,14 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-1
     restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
+    # Bound libc DNS resolution when the PostgreSQL container is unavailable.
+    dns_opt: ["timeout:1", "attempts:1"]
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-1
-      - REDIS_CONNECTION=redis:6379
+      - DATABASE_CONNECTION_FILE=/run/secrets/db_connection
+    secrets:
+      - db_connection
     deploy:
       resources:
         limits:
@@ -98,13 +99,13 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-2
     restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
+    dns_opt: ["timeout:1", "attempts:1"]
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-2
-      - REDIS_CONNECTION=redis:6379
+      - DATABASE_CONNECTION_FILE=/run/secrets/db_connection
+    secrets:
+      - db_connection
     deploy:
       resources:
         limits:
@@ -121,13 +122,13 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/maxivalenzano/dev-ops-backend}:${IMAGE_TAG:-local}
     container_name: lab-backend-3
     restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
+    dns_opt: ["timeout:1", "attempts:1"]
     environment:
       - PORT=3000
       - INSTANCE_NAME=backend-dotnet-3
-      - REDIS_CONNECTION=redis:6379
+      - DATABASE_CONNECTION_FILE=/run/secrets/db_connection
+    secrets:
+      - db_connection
     deploy:
       resources:
         limits:
@@ -174,3 +175,7 @@ networks:
 volumes:
   redis-data:
   portainer-data:
+
+secrets:
+  db_connection:
+    file: ${SECRETS_DIR:-/opt/devops-lab/secrets}/app_connection

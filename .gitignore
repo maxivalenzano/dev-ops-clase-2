@@ -25,3 +25,14 @@ Thumbs.db
 
 # Local planning and notes (not committed)
 PLAN_*.md
+
+# Database credentials, logical backups and release receipts
+secrets/
+backups/
+*.dump
+*.backup
+*.pgpass
+backup-export/
+__pycache__/
+*.pyc
+migration-artifacts/
