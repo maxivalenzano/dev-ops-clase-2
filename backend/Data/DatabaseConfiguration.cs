@@ -16,7 +16,8 @@ public static class DatabaseConfiguration
         var options = new NpgsqlConnectionStringBuilder(connection)
         {
             MaxPoolSize = 5,
-            Timeout = 5,
+            // Return database unavailability before Nginx's five-second upstream read timeout.
+            Timeout = 2,
             CommandTimeout = 30,
             IncludeErrorDetail = false
         };
