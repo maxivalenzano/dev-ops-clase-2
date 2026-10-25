@@ -116,6 +116,7 @@ def main():
         def start_app(phase, index=1):
             name = RUN + '-' + phase.lower() + '-' + str(index)
             command('docker', 'run', '-d', '--name', name, '--network', NETWORK,
+                    '--dns-option', 'timeout:1', '--dns-option', 'attempts:1',
                     '-p', '127.0.0.1::3000', '-e', 'INSTANCE_NAME=' + name,
                     '-v', f'{work / "app"}:/run/secrets/db_connection:ro',
                     '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
