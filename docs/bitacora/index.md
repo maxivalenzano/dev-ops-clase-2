@@ -6,6 +6,11 @@ Registro cronológico de avances, experimentos, decisiones arquitectónicas y ap
 
 ## 📋 Entradas Recientes
 
+- [**2026-10-25: Inicio de migración del laboratorio a AWS EC2 y GHCR**](/bitacora/2026-10-25-migracion-aws-ec2)
+  - Alcance y fases previstas para trasladar el despliegue desde Azure VM/ACR a AWS EC2/GHCR con Azure DevOps.
+  - Estado inicial de solo lectura: EC2 accesible, aún sin Docker ni agente de Azure Pipelines; despliegue funcional pendiente.
+  - Dependencias registradas: decisión de persistencia Redis, permisos y secretos GHCR, Environment de Azure DevOps y acceso opcional a Portainer.
+
 - [**2026-09-14: Implementación de Portainer CE para Gestión Visual de Contenedores, Exposición de Puerto 9000 en Azure NSG y Troubleshooting de Inicialización**](/bitacora/2026-09-14-implementacion-portainer-ce-gestion-visual-azure)
   - Despliegue de Portainer Community Edition (CE) sobre Azure VM (`Standard_B2als_v2`) y orquestación GitOps en `compose.yaml`.
   - Apertura del puerto 9000 en el Network Security Group (NSG) de Azure para acceso público directo vía `http://devops-maxivalenzano.com:9000/`.

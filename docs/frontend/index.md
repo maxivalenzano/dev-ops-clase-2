@@ -17,6 +17,10 @@ El frontend proporciona un panel de control interactivo para interactuar con la 
 
 En producción y dentro del contenedor, el frontend se compila con `npm run build` y los archivos estáticos resultantes en `dist/` se copian al contenedor Nginx.
 
+## Despliegue actual
+
+La versión `3.0.0-build.81` está desplegada en [http://18.216.227.211](http://18.216.227.211) detrás del gateway Nginx en EC2. Las pruebas de despliegue confirmaron respuestas `frontend-info` de las tres réplicas frontend. CI/CD 81 completó sus cuatro etapas.
+
 El `nginx.conf` del frontend se encarga de:
 - Servir los archivos en el puerto `8081` (o `80` en modo compose).
 - Habilitar soporte para Single Page Application (**SPA Routing**) mediante `try_files $uri $uri/ /index.html;`.
@@ -39,7 +43,8 @@ server {
 ## 📊 Dashboard Interactivo
 
 El dashboard incluye las siguientes secciones funcionales:
-1. **Live Instance Monitor**: Identifica qué réplica del backend (`backend-node-1` o `backend-node-2`) respondió a la petición.
-2. **Stress Controls**: Botones interactivos para disparar CPU stress, consumir memoria RAM en bloques de 30MB/60MB, o alternar el health check.
-3. **Round Robin Tester**: Dispara ráfagas de 10 peticiones concurrentes para visualizar el reparto de carga equitativo.
-4. **Timeout Simulator**: Dispara requests de 6 segundos para validar el error `504 Gateway Timeout` generado por Nginx.
+1. **Monitor de instancias**: Muestra la réplica frontend y el backend que atendió la última consulta.
+2. **Pruebas de estrés**: Permite generar solicitudes concurrentes, demorar respuestas, consumir CPU y alternar el estado de salud de un backend.
+3. **Tablero distribuido**: Crea, completa y elimina tareas almacenadas en Redis y muestra qué réplica las atendió.
+
+En local, el stack completo se levanta con Podman Compose desde la raíz del repositorio: `podman compose up --build -d`.

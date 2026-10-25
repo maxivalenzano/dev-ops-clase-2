@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress';
 
 export default defineConfig({
-  title: 'DevOps & Podman Lab',
-  description: 'Documentación técnica, arquitectura y bitácora del laboratorio de microservicios y contenedores',
+  title: 'DevOps Lab',
+  description: 'Arquitectura y bitácora del laboratorio: Podman local, Docker en EC2 y Azure DevOps',
   lang: 'es-AR',
   base: process.env.GITHUB_ACTIONS ? '/dev-ops-clase-2/' : (process.env.VITEPRESS_BASE || '/'),
   lastUpdated: true,
@@ -44,7 +44,7 @@ export default defineConfig({
       { text: 'Arquitectura', link: '/general/overview' },
       { text: 'Backend', link: '/backend/' },
       { text: 'Frontend', link: '/frontend/' },
-      { text: 'Infra & Pods', link: '/infrastructure/' },
+      { text: 'Infraestructura', link: '/infrastructure/' },
       { text: 'Bitácora', link: '/bitacora/' }
     ],
 
@@ -102,7 +102,8 @@ export default defineConfig({
           items: [
             { text: 'Nginx Gateway & Proxy', link: '/infrastructure/' },
             { text: 'Balanceo de Carga y Timeouts', link: '/infrastructure/#balanceo-y-resiliencia' },
-            { text: 'Podman Pods (Localhost)', link: '/infrastructure/#podman-pods-localhost-networking' }
+            { text: 'Ejecución local y en la nube', link: '/infrastructure/#ejecucion' },
+            { text: 'Migración AWS EC2 verificada', link: '/bitacora/2026-10-25-migracion-aws-ec2' }
           ]
         }
       ],

@@ -1,74 +1,42 @@
-# 🌐 Infraestructura, Nginx y Pods
+# Infraestructura y red
 
-Configuración del Gateway central, políticas de balanceo y networking sobre Podman.
+La topología actual está declarada en [`compose.yaml`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/main/compose.yaml) y usa una red bridge llamada `lab-network`.
 
----
+| Servicio | Réplicas | Puerto del contenedor | Función |
+|---|---:|---:|---|
+| Nginx gateway | 1 | 80 | Entrada HTTP; enruta `/` y `/api/` |
+| Frontend React servido por Nginx | 3 | 8081 | Aplicación SPA |
+| API Minimal de .NET 10 | 3 | 3000 | Tareas, salud e interacción con Redis |
+| Redis 7 | 1 | 6379 | Estado compartido de tareas, volumen `redis-data` |
+| Portainer CE | 1 | 9000 y 9443 | Panel de administración |
 
-## 🚪 Nginx Gateway & Reverse Proxy
+Nginx distribuye solicitudes entre las réplicas y tiene timeouts de 5 segundos. Las directivas `proxy_next_upstream` reintentan ciertos errores; esto ayuda a observar fallos de contenedores, pero no garantiza cero interrupciones ni alta disponibilidad del host.
 
-El Gateway actúa como punto único de contacto (Single Point of Entry) para el cliente en el puerto `8080`.
+## Ejecución
 
-### Configuración del Upstream Cluster
+- **Local:** Podman Compose: `podman compose up --build -d`. Para consultar y detener: `podman compose ps` y `podman compose down`.
+- **Nube:** Docker Compose en Ubuntu EC2. Docker Engine 29.9.2, Compose 5.6.1 y Buildx están instalados; el servicio está habilitado y activo. `hello-world` pasó y el usuario `ubuntu` ejecuta Docker sin `sudo`.
 
-```nginx
-upstream backend_cluster {
-    server backend-1:3000 max_fails=2 fail_timeout=10s;
-    server backend-2:3000 max_fails=2 fail_timeout=10s;
-}
+El pipeline de cuatro etapas publica y despliega mediante GHCR y EC2. Los scripts `run-pod.ps1` y `run-pod.sh` son anteriores a la composición actual y no se usan en estos pasos.
+
+## Migración a EC2 (CI/CD validado)
+
+El directorio `/opt/devops-lab` ya está preparado y Compose con sus scripts terminó de copiarse. `scripts/setup-ec2.sh` prepara el host; `scripts/deploy-ec2.sh` despliega las imágenes y `scripts/verify-deployment.sh` verifica el resultado. La configuración usa `BACKEND_IMAGE` y `FRONTEND_IMAGE` para las referencias de GHCR, junto con `IMAGE_TAG` para seleccionar la versión.
+
+Redis conserva su volumen, usa AOF y healthcheck, y no publica el puerto 6379 en el host. Portainer escucha solo en `127.0.0.1:9000` y `127.0.0.1:9443`. Para abrir su interfaz HTTPS, crear el túnel `ssh -L 9443:127.0.0.1:9443` y visitar `https://localhost:9443`.
+
+La aplicación está desplegada como `3.0.0-build.81` en [http://18.216.227.211](http://18.216.227.211); los nueve contenedores están running. El agente `ec2-devops` está activo en `devops-ec2-env`. Los cuatro stages de CI/CD 81 finalizaron correctamente; se publicaron Release `v3.0.0` y Deployment `ec2-demo`. Las imágenes backend y frontend usan el mismo SHA de commit `3bbd09d848338f63efe6900c05a7004fde4281be`.
+
+La validación pasó: HTTP 200 local y público, persistencia Redis tras reiniciar Redis, recrear un backend, rollback manual a `3.0.0`, nueva entrega y reinicio real de Ubuntu. Una tarea marcador sobrevivió rollback, entrega y reinicio; luego se eliminó y el tablero volvió a estar vacío (`totalCount=0`). También pasaron failover frontend/backend, 30 solicitudes entre tres backends y 12 respuestas `frontend-info` de tres frontends. Portainer CE 2.45.3 quedó inicializado; su API autenticada verifica nueve contenedores.
+
+CI/CD 81, las 42 pruebas backend y los builds frontend y documentación pasaron. La demo oficial usa HTTP por IP; dominio y HTTPS de aplicación son opcionales y no se han ejecutado. Podman en WSL no está validado; el historial está en la [bitácora](/bitacora/).
+
+La publicación de GitHub Release/Deployment mediante `scripts/publish-github-release.py` se completó: Release `v3.0.0` y Deployment `ec2-demo` se publicaron correctamente.
+
+Para Portainer HTTPS desde Windows, mantener esta conexión SSH abierta y luego navegar a `https://localhost:9443`:
+
+```powershell
+ssh -i "C:\Users\m.valenzano\Downloads\vm-dev-ops-aws.pem" -L 9443:127.0.0.1:9443 ubuntu@18.216.227.211
 ```
 
----
-
-## ⚖️ Balanceo y Resiliencia
-
-### 1. Failover Activo (`proxy_next_upstream`)
-Si una de las réplicas devuelve un error 500/502/503/504 o la conexión expira, Nginx redirige automáticamente la petición a la siguiente réplica sin que el usuario final perciba el fallo.
-
-```nginx
-location /api/ {
-    proxy_pass http://backend_cluster;
-    proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-    proxy_next_upstream_tries 2;
-}
-```
-
-### 2. Timeouts Agresivos para Pruebas
-Para evidenciar fallos rápidamente en el laboratorio, se fijó el timeout en 5 segundos:
-```nginx
-proxy_connect_timeout 5s;
-proxy_send_timeout 5s;
-proxy_read_timeout 5s;
-```
-
-### 3. Respuestas de Error JSON
-En lugar de las páginas HTML por defecto de Nginx, se configuran respuestas JSON limpias:
-* `502 Bad Gateway`: Cuando ninguna réplica está disponible o viva.
-* `504 Gateway Timeout`: Cuando el backend superó los 5 segundos de respuesta.
-
----
-
-## 🚀 Podman Pods (Localhost Networking)
-
-Cuando se ejecuta mediante el script `run-pod.ps1` (o `.sh`), todos los contenedores entran en un único **Pod**:
-
-```
-+-------------------------------------------------------------+
-|                         lab-pod                             |
-|                                                             |
-|   Nginx (Port 80) <---> Frontend SPA (Port 8081)           |
-|        ^                                                    |
-|        |                                                    |
-|        +-------------> Backend-1 (Port 3001)               |
-|        |                                                    |
-|        +-------------> Backend-2 (Port 3002)               |
-|                                                             |
-|   (Toda la comunicación interna se realiza por localhost)   |
-+-------------------------------------------------------------+
-```
-
-### Script de Lanzamiento (`scripts/run-pod.ps1`)
-El script ejecuta:
-1. `podman pod create --name lab-pod -p 8080:80`
-2. Construye y arranca los contenedores de backend asignándoles puertos únicos (`3001` y `3002`).
-3. Construye y arranca el frontend en el puerto `8081`.
-4. Levanta el contenedor de Nginx usando `nginx-pod.conf` configurado para apuntar a `localhost:3001`, `localhost:3002` y `localhost:8081`.
+Luego abrir `https://localhost:9443`. El helper de acceso a Portainer está guardado localmente fuera del repositorio; no se enlaza desde la documentación publicada ni se muestran credenciales aquí.

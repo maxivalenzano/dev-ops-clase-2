@@ -1,19 +1,20 @@
 # 🎓 Defensa Técnica y Presentación de Arquitectura Cloud & DevOps
 
-> **Laboratorio Integral de Microservicios, IaaS en Azure, CI/CD DevSecOps y Gobernanza de Contenedores**  
+> **Laboratorio de contenedores, CI/CD y gobernanza**
 > **Autor:** Maxi Valenzano — **Cátedra:** DevOps (UTN FRRe) — **Año:** 2026
+
+> **Estado actual (25/10/2026):** Esta presentación conserva el diseño académico e histórico de la etapa en Azure. El estado vigente usa Podman Compose en local y Docker Compose en Ubuntu EC2. CI/CD 81 completó sus cuatro etapas; la versión activa `3.0.0-build.81` está publicada en GHCR y desplegada en EC2 en [http://18.216.227.211](http://18.216.227.211). Se validó la persistencia de una tarea tras rollback, nueva entrega y reinicio real del host. Dominio y HTTPS de aplicación son opcionales y no se ejecutaron; Podman en WSL no está validado.
 
 ---
 
-## 🧭 Accesos Rápidos y Enlaces en Vivo
+## 🧭 Recursos del proyecto
 
 | Recurso | Enlace / Endpoint | Descripción |
 | :--- | :--- | :--- |
-| 🌐 **Aplicación Web en Producción** | [devops-maxivalenzano.com](http://devops-maxivalenzano.com) | Clúster de 3 réplicas Frontend + 3 réplicas Backend + Nginx + Redis |
-| 🚢 **Portainer CE Dashboard** | [devops-maxivalenzano.com:9000](http://devops-maxivalenzano.com:9000) | Panel de control visual de los 10 contenedores en tiempo real |
+| ☁️ **Destino de nube** | Ubuntu EC2: `18.216.227.211` | Aplicación `3.0.0-build.81` activa; nueve contenedores en ejecución |
 | 🛡️ **SonarQube Cloud SAST** | [SonarCloud DevOps Dashboard](https://sonarcloud.io/summary/new_code?id=maxivalenzano_DevOps) | Quality Gate, análisis estático, cobertura y vulnerabilidades |
 | ⚙️ **Azure Pipelines CI/CD** | [Azure DevOps Pipeline](https://dev.azure.com/maxivalenzano/DevOps/_build/latest?definitionId=1&branchName=devel) | Pipeline desacoplado en 4 stages automatizados |
-| 📦 **GitHub Packages (GHCR)** | [dev-ops-backend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend) / [frontend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-frontend) | Registro público de imágenes OCI versionadas con SemVer |
+| 📦 **GitHub Packages (GHCR)** | [dev-ops-backend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-backend) / [frontend](https://github.com/maxivalenzano/dev-ops-clase-2/pkgs/container/dev-ops-frontend) | Destino previsto para sustituir ACR en el pipeline |
 | 🏷️ **GitHub Releases & Changelog** | [Releases Oficiales](https://github.com/maxivalenzano/dev-ops-clase-2/releases) | Historial de versiones y notas de despliegue automatizadas |
 
 ---
