@@ -166,12 +166,25 @@ def main():
                 blocker.wait(timeout=30)
             assert phases['P3']['targetMigration'] not in history()
         record('DDL lock timeout prevents an indefinite deployment', ddl_timeout)
-        record('P3: backfill then NOT NULL and CHECK preserve task identity', lambda: migrate('P3'))
+        sql(f"UPDATE tasks SET priority = 3, is_completed = true WHERE id = '{marker}'")
+        record('P3: backfill, constraints and reversible demo-state migration', lambda: migrate('P3'))
         _, p3 = start_app('P3')
         upgraded = http(p3, '/api/tasks/' + marker)
-        for key in ('id', 'title', 'isCompleted', 'createdAt', 'createdByNode'):
+        for key in ('id', 'title', 'createdAt', 'createdByNode'):
             assert upgraded[key] == task[key], key
-        assert upgraded['priority'] == 2
+        assert upgraded['isCompleted'] is False
+        assert upgraded['priority'] == 1
+
+        def reversible_state_migration():
+            migrate(target='20261025000400_004_RequirePriority')
+            restored = http(p3, '/api/tasks/' + marker)
+            assert restored['priority'] == 3
+            assert restored['isCompleted'] is True
+            migrate('P3')
+            reset = http(p3, '/api/tasks/' + marker)
+            assert reset['priority'] == 1
+            assert reset['isCompleted'] is False
+        record('Down restores the previous priority and completion state; Up reapplies the test state', reversible_state_migration)
 
         def idempotence():
             before = history()
@@ -246,9 +259,9 @@ def main():
             assert sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'restore_test').stdout.strip() == history()
             migrate('P1')  # Deliberate destructive Down only in this disposable database.
             migrate('P3')
-            assert http(p3, '/api/tasks/' + marker)['priority'] == 2
+            assert http(p3, '/api/tasks/' + marker)['priority'] == 1
             assert sql(f"SELECT priority FROM tasks WHERE id='{marker}'", 'restore_test').stdout.strip() == '3'
-        record('Backup restores separately; Down cannot recover dropped priority values', restore_and_down)
+        record('Backup restores separately; Down to P1 drops priority while P5 Down restores its saved state', restore_and_down)
 
         def sql_artifact():
             name = RUN + '-sql-artifact'
@@ -263,7 +276,7 @@ def main():
             before = sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout
             sql(statement, database='freshsql', user='lab_migrator')
             assert sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout == before
-            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'freshsql').stdout.strip() == '4'
+            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'freshsql').stdout.strip() == '5'
         record('Published forward SQL executes twice on a separate empty database', sql_artifact)
 
         def fresh_to_latest():
@@ -273,7 +286,7 @@ def main():
             connection.write_text(connection.read_text().replace('Database=lab;', 'Database=fresh;'))
             connection.chmod(0o444)
             migrate('P3')
-            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'fresh').stdout.strip() == '4'
+            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'fresh').stdout.strip() == '5'
         record('Empty database migrates directly to latest P3', fresh_to_latest)
 
 

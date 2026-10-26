@@ -1,5 +1,5 @@
 {
-  "P1": { "targetMigration": "20261025000100_001_InitialTasks", "minSchema": 1, "maxSchema": 4 },
-  "P2": { "targetMigration": "20261025000200_002_AddPriorityNullable", "minSchema": 2, "maxSchema": 4 },
-  "P3": { "targetMigration": "20261025000400_004_RequirePriority", "minSchema": 4, "maxSchema": 4 }
+  "P1": { "targetMigration": "20261025000100_001_InitialTasks", "minSchema": 1, "maxSchema": 5 },
+  "P2": { "targetMigration": "20261025000200_002_AddPriorityNullable", "minSchema": 2, "maxSchema": 5 },
+  "P3": { "targetMigration": "20261026000100_005_ResetTaskStateForDemo", "minSchema": 5, "maxSchema": 5 }
 }

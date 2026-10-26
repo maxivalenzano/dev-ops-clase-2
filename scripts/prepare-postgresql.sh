@@ -105,6 +105,7 @@ fi
 docker stop lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null 2>&1 || true
 writers_paused=true
 before_data="$(data_fingerprint)"
+before_identity="$(data_identity_fingerprint)"
 backup="$deploy_dir/backups/$BUILD_ID"
 bash "$source_dir/scripts/backup-postgresql.sh" "$backup"
 if [[ "$before" == 0 || "$before" < "$MIGRATION_TARGET" ]]; then
@@ -129,7 +130,12 @@ if [[ "$first_cutover" == true ]]; then
     [[ "$(sql 'SELECT count(*) FROM tasks;')" == 0 ]]
   fi
 else
-  [[ "$before_data" == "$(data_fingerprint)" ]]
+  if [[ "$before" != "$MIGRATION_TARGET" && "$MIGRATION_TARGET" == 20261026000100_005_ResetTaskStateForDemo ]]; then
+    [[ "$before_identity" == "$(data_identity_fingerprint)" ]]
+    [[ "$(sql 'SELECT count(*) FROM tasks WHERE priority <> 1 OR is_completed;')" == 0 ]]
+  else
+    [[ "$before_data" == "$(data_fingerprint)" ]]
+  fi
 fi
 if [[ "$first_cutover" == false ]]; then
   docker start lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null

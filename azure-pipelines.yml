@@ -215,7 +215,7 @@ stages:
 
       # Job B: Validación de Frontend React y Auditoría de Vulnerabilidades
       - job: PostgreSQLIntegration
-        displayName: 'PostgreSQL real: P1 → P2 → P3, rollback y restore'
+        displayName: 'PostgreSQL real: P1 → P2 → P3, migración de estado reversible, rollback y restore'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
