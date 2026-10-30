@@ -7,7 +7,7 @@ import tempfile
 root=pathlib.Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='release-reservation-') as directory:
     env=dict(os.environ,DEPLOY_DIR=directory,BUILD_ID='101',SOURCE_COMMIT='a'*40,
-             IMAGE_TAG='test',MIGRATION_TARGET='20261025000100_001_InitialTasks')
+             IMAGE_TAG='test')
     command=['bash','-c','source scripts/lib-postgresql.sh; reserve_release']
     other=dict(env,BUILD_ID='102')
     holding=subprocess.Popen(['bash','-c','source scripts/lib-postgresql.sh; reserve_release; echo reserved; read -r token'],

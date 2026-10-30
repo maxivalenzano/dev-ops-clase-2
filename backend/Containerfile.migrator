@@ -8,8 +8,7 @@ COPY backend/ backend/
 ENV ASPNETCORE_ENVIRONMENT=Production
 RUN dotnet ef migrations bundle --project backend/Backend.csproj --self-contained --target-runtime linux-x64 --output /out/efbundle
 RUN mkdir -p /out/sql && \
-    dotnet ef migrations script --project backend/Backend.csproj --idempotent --output /out/sql/forward.sql && \
-    dotnet ef migrations script --project backend/Backend.csproj 20261026000100_005_ResetTaskStateForDemo 20261025000100_001_InitialTasks --output /out/sql/rollback.sql
+    dotnet ef migrations script --project backend/Backend.csproj --idempotent --output /out/sql/forward.sql
 
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runner
 WORKDIR /app

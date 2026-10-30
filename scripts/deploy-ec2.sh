@@ -32,11 +32,10 @@ PY
 trap finish EXIT
 export APP_URL="${APP_URL:-http://18.216.227.211}"
 current_schema="$(schema)"
-current_number="$(schema_number "$current_schema")"
 python3 - "$receipt" "$current_schema" <<'PY'
 import json,os,sys
 x=json.load(open(sys.argv[1]))
-for key in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG','MIGRATION_TARGET','RELEASE_PHASE'):
+for key in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG'):
     if x[key.lower()] != os.environ[key]: raise SystemExit('PostgreSQL receipt/release mismatch')
 if x['result'] != 'passed' or x['schema_after'] != sys.argv[2]: raise SystemExit('PostgreSQL receipt/schema not valid')
 PY
@@ -58,12 +57,12 @@ if [[ -f "$deploy_dir/.env" && -f "$deploy_dir/compose.yaml" ]]; then
 fi
 rollback() {
   failed_status="$1"
-  echo 'CD verification failed. Checking compatibility of the previous PostgreSQL application.' >&2
+  echo 'CD verification failed. Trying the previous application against the migrated schema.' >&2
   if [[ -n "$previous" && -f "$previous/deployment.json" ]] && \
-    python3 - "$previous/deployment.json" "$current_number" <<'PY'
+    python3 - "$previous/deployment.json" <<'PY'
 import json,sys
-x=json.load(open(sys.argv[1])); n=int(sys.argv[2])
-raise SystemExit(0 if x.get('storage')=='postgresql' and x.get('min_schema',99)<=n<=x.get('max_schema',-1) else 1)
+x=json.load(open(sys.argv[1]))
+raise SystemExit(0 if x.get('storage')=='postgresql' else 1)
 PY
   then
     if cp "$previous/.env" "$previous/compose.yaml" "$deploy_dir/" && \
@@ -90,14 +89,13 @@ cp "$source_dir/scripts/verify-deployment.sh" "$source_dir/scripts/verify-deploy
 compose_app up -d --no-build
 compose_app up -d --no-build --force-recreate nginx
 DEPLOY_DIR="$deploy_dir" python3 "$deploy_dir/scripts/verify-deployment.py"
-python3 - "$receipt" "$deploy_dir/deployment.json" "$source_dir/backend/schema-compatibility.json" <<'PY'
+python3 - "$receipt" "$deploy_dir/deployment.json" <<'PY'
 import datetime,json,os,pathlib,sys
-x=json.load(open(sys.argv[1])); compatibility=json.load(open(sys.argv[3]))[os.environ['RELEASE_PHASE']]
+x=json.load(open(sys.argv[1]))
 x.update(storage='postgresql', app_url=os.environ['APP_URL'],
- min_schema=compatibility['minSchema'], max_schema=compatibility['maxSchema'],
  deployed_at=datetime.datetime.now(datetime.timezone.utc).isoformat(), verification='passed')
 pathlib.Path(sys.argv[2]).write_text(json.dumps(x,indent=2)+'\n')
 PY
 release_reservation
 finished=true
-echo "Deployed $IMAGE_TAG ($RELEASE_PHASE); schema $current_schema; verification passed."
+echo "Deployed $IMAGE_TAG; schema $current_schema; verification passed."

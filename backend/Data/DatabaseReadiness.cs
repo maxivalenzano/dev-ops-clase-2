@@ -8,12 +8,12 @@ public static class DatabaseReadiness
     {
         var applied = (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
         var known = db.Database.GetMigrations().ToArray();
-        var minimum = db.Compatibility.Release switch { "P1" => 1, "P2" => 2, _ => 4 };
-        // Only a known additive migration prefix is compatible. Future unknown changes need a new review.
-        if (applied.Length < minimum || applied.Length > known.Length || !applied.SequenceEqual(known.Take(applied.Length)))
-            throw new InvalidOperationException("Database schema is outside this application's compatibility range.");
+        // Require this application's migrations, while allowing a previous app build to run
+        // against later migrations during the deploy/rollback window.
+        if (known.Length == 0 || applied.Length < known.Length || !applied.Take(known.Length).SequenceEqual(known))
+            throw new InvalidOperationException("Database migrations do not contain this application's migration history.");
         // Executes an authenticated query including every column this release needs, even for an empty table.
         await db.Tasks.AsNoTracking().Take(1).ToListAsync(cancellationToken);
-        return new { status = "UP", storage = "PostgreSQL", release = db.Compatibility.Release, schema = applied.Last() };
+        return new { status = "UP", storage = "PostgreSQL", schema = applied.Last() };
     }
 }

@@ -15,7 +15,6 @@ var portEnv = Environment.GetEnvironmentVariable("PORT");
 var port = int.TryParse(portEnv, out var parsedPort) ? parsedPort : 3000;
 var instanceName = Environment.GetEnvironmentVariable("INSTANCE_NAME") ?? Environment.MachineName;
 
-builder.Services.AddSingleton(new SchemaCompatibility());
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(DatabaseConfiguration.ConnectionString(builder.Configuration)));
 builder.Services.AddScoped<ITaskService, PostgresTaskService>();
 builder.Services.AddRequestTimeouts(options => options.AddPolicy("database", new RequestTimeoutPolicy

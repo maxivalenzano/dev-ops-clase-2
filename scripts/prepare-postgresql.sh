@@ -31,6 +31,8 @@ finish() {
   exit "$result"
 }
 trap finish EXIT
+: "${MIGRATION_MANIFEST:?Set MIGRATION_MANIFEST to the downloaded migration artifact}"
+[[ -f "$MIGRATION_MANIFEST" ]]
 available_kb="$(awk '/MemAvailable/ {print $2}' /proc/meminfo)"
 free_kb="$(df -Pk "$deploy_dir" | awk 'NR==2 {print $4}')"
 [[ "$available_kb" -ge 524288 && "$free_kb" -ge 2097152 ]] || { echo 'Insufficient available memory or disk for database/backup.' >&2; false; }
@@ -44,12 +46,13 @@ for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$MIGRATOR_IMAGE"; do docker pul
 for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$MIGRATOR_IMAGE"; do
   [[ "$(docker image inspect "$image:$IMAGE_TAG" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" == "$SOURCE_COMMIT" ]]
 done
-docker image inspect "$BACKEND_IMAGE:$IMAGE_TAG" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx "TASK_RELEASE=$RELEASE_PHASE"
-python3 - "$source_dir/backend/schema-compatibility.json" <<'PY'
-import json,os,sys
-x=json.load(open(sys.argv[1]))[os.environ['RELEASE_PHASE']]
-if x['targetMigration'] != os.environ['MIGRATION_TARGET']: raise SystemExit('Phase/target mismatch')
+latest_migration="$(python3 - "$MIGRATION_MANIFEST" <<'PY'
+import json,sys
+migrations=json.load(open(sys.argv[1]))['migrations']
+if not migrations: raise SystemExit('The release contains no EF Core migrations.')
+print(migrations[-1])
 PY
+)"
 if [[ -n "${auth_dir:-}" ]]; then rm -rf -- "$auth_dir"; unset DOCKER_CONFIG; fi
 mkdir -p "$SECRETS_DIR" "$deploy_dir/data"
 chmod 700 "$SECRETS_DIR"
@@ -77,23 +80,6 @@ bash "$source_dir/scripts/provision-postgresql.sh"
 [[ "$(sql 'SELECT current_database();')" == devops ]]
 before="$(schema)"
 if [[ "$before" != 0 ]]; then validate_schema; fi
-before_number="$(schema_number "$before")"
-target_number="$(schema_number "$MIGRATION_TARGET")"
-effective_number=$((before_number>target_number ? before_number : target_number))
-python3 - "$source_dir/backend/schema-compatibility.json" "$deploy_dir/deployment.json" "$effective_number" <<'PY'
-import json,os,pathlib,sys
-manifest=json.load(open(sys.argv[1]))
-number=int(sys.argv[3])
-incoming=manifest[os.environ['RELEASE_PHASE']]
-if not incoming['minSchema'] <= number <= incoming['maxSchema']: raise SystemExit('Incoming app/schema incompatible')
-p=pathlib.Path(sys.argv[2])
-previous=json.loads(p.read_text()) if p.exists() else {}
-if previous.get('storage') == 'postgresql':
-    previous=manifest[previous['release_phase']]
-    if not previous['minSchema'] <= number <= previous['maxSchema']: raise SystemExit('Previous app cannot coexist with target schema')
-elif os.environ['RELEASE_PHASE'] != 'P1':
-    raise SystemExit('The first PostgreSQL release must be P1; deploy P2/P3 separately.')
-PY
 if [[ ! -f "$deploy_dir/deployment.json" ]] || ! python3 - "$deploy_dir/deployment.json" <<'PY'
 import json,sys
 raise SystemExit(0 if json.load(open(sys.argv[1])).get('storage') == 'postgresql' else 1)
@@ -101,26 +87,25 @@ PY
 then
   first_cutover=true
 fi
-# Brief maintenance makes the demo's backup/restore fingerprint reproducible.
+# Pause writers while taking the backup and applying the ordered migration bundle.
 docker stop lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null 2>&1 || true
 writers_paused=true
-before_data="$(data_fingerprint)"
-before_identity="$(data_identity_fingerprint)"
+before_history="$(migration_history)"
 backup="$deploy_dir/backups/$BUILD_ID"
 bash "$source_dir/scripts/backup-postgresql.sh" "$backup"
-if [[ "$before" == 0 || "$before" < "$MIGRATION_TARGET" ]]; then
+if [[ "$before" == 0 || "$before" < "$latest_migration" ]]; then
   migration_started=true
   timeout --signal=TERM --kill-after=15s 180s docker run --rm --name "devops-migrator-$BUILD_ID" \
     --network devops-lab_lab-network --memory 256m \
     --mount "type=bind,src=$SECRETS_DIR/migrator_connection,dst=/run/secrets/db_connection,readonly" \
-    -e DATABASE_CONNECTION_FILE=/run/secrets/db_connection "$MIGRATOR_IMAGE:$IMAGE_TAG" "$MIGRATION_TARGET"
+    -e DATABASE_CONNECTION_FILE=/run/secrets/db_connection "$MIGRATOR_IMAGE:$IMAGE_TAG"
   migration_started=false
 else
-  echo 'No forward migrations pending for this release; preserving the newer compatible schema.'
+  echo 'Database already has this release migration history or a newer compatible history; preserving it.'
 fi
 after="$(schema)"
-[[ "$after" == "$MIGRATION_TARGET" || "$after" > "$MIGRATION_TARGET" ]]
-validate_schema
+validate_complete_schema
+after_history="$(migration_history)"
 sql 'REVOKE INSERT,UPDATE,DELETE ON "__EFMigrationsHistory" FROM devops_app;' >/dev/null
 if [[ "$first_cutover" == true ]]; then
   if docker inspect lab-redis >/dev/null 2>&1; then
@@ -130,28 +115,43 @@ if [[ "$first_cutover" == true ]]; then
     [[ "$(sql 'SELECT count(*) FROM tasks;')" == 0 ]]
   fi
 else
-  if [[ "$before" != "$MIGRATION_TARGET" && "$MIGRATION_TARGET" == 20261026000100_005_ResetTaskStateForDemo ]]; then
-    [[ "$before_identity" == "$(data_identity_fingerprint)" ]]
-    [[ "$(sql 'SELECT count(*) FROM tasks WHERE priority <> 1 OR is_completed;')" == 0 ]]
-  else
-    [[ "$before_data" == "$(data_fingerprint)" ]]
-  fi
-fi
-if [[ "$first_cutover" == false ]]; then
   docker start lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null
   writers_paused=false
+  python3 - <<'PY'
+import json,time,urllib.error,urllib.request
+url='http://127.0.0.1/api/ready'
+opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+deadline=time.monotonic()+90
+last=None
+while time.monotonic()<deadline:
+    try:
+        with opener.open(url, timeout=5) as response:
+            payload=json.loads(response.read())
+            if response.status == 200 and payload.get('status') == 'UP':
+                print('Previous application remains ready on the migrated schema.')
+                break
+            last=f'HTTP {response.status}: {payload}'
+    except Exception as error:
+        last=str(error)
+    time.sleep(2)
+else:
+    raise SystemExit(f'Previous application is not compatible with the migrated schema: {last}')
+PY
 fi
 # Authenticated SQL using the restricted application role, not only pg_isready.
 docker exec lab-postgres bash -c 'export PGPASSWORD="$(cat /run/secrets/app_password)"; psql -X -qAt -v ON_ERROR_STOP=1 -h127.0.0.1 -U devops_app -d devops -c "SELECT count(*) FROM tasks;"' >/dev/null
 export SCHEMA_BEFORE="$before" SCHEMA_AFTER="$after" BACKUP_PATH="$backup" FIRST_CUTOVER="$first_cutover"
+export MIGRATIONS_BEFORE="$before_history" MIGRATIONS_AFTER="$after_history"
 export DURATION_SECONDS="$((SECONDS-started))" TASK_COUNT="$(sql 'SELECT count(*) FROM tasks;')"
 export MIGRATOR_DIGEST="$(docker image inspect "$MIGRATOR_IMAGE:$IMAGE_TAG" --format '{{index .RepoDigests 0}}')"
-python3 - "$receipt" "$source_dir/backend/schema-compatibility.json" <<'PY'
+python3 - "$receipt" <<'PY'
 import datetime,json,os,pathlib,sys
-x={k.lower():os.environ[k] for k in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG','MIGRATION_TARGET','RELEASE_PHASE','SCHEMA_BEFORE','SCHEMA_AFTER','BACKUP_PATH','FIRST_CUTOVER','MIGRATOR_DIGEST')}
+x={k.lower():os.environ[k] for k in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG','SCHEMA_BEFORE','SCHEMA_AFTER','BACKUP_PATH','FIRST_CUTOVER','MIGRATOR_DIGEST')}
 x.update(result='passed', duration_seconds=int(os.environ['DURATION_SECONDS']), task_count=int(os.environ['TASK_COUNT']), prepared_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
-compat=json.load(open(sys.argv[2]))[os.environ['RELEASE_PHASE']]
-x.update(min_schema=compat['minSchema'],max_schema=compat['maxSchema'],backup_verification=json.load(open(pathlib.Path(os.environ['BACKUP_PATH'])/'verification.json')))
+x.update(migrations_before=os.environ['MIGRATIONS_BEFORE'].splitlines(),
+         migrations_after=os.environ['MIGRATIONS_AFTER'].splitlines(),
+         migration_count=len(os.environ['MIGRATIONS_AFTER'].splitlines())-len(os.environ['MIGRATIONS_BEFORE'].splitlines()),
+         backup_verification=json.load(open(pathlib.Path(os.environ['BACKUP_PATH'])/'verification.json')))
 pathlib.Path(sys.argv[1]).write_text(json.dumps(x,indent=2)+'\n')
 PY
 {

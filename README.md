@@ -146,7 +146,7 @@ flowchart LR
     GitRepo -->|"Webhook Trigger"| Pipeline["⚡ Azure Pipelines Multi-Stage"]
 
     subgraph S1 ["Stage 1: Versioning"]
-        SemVer["🏷️ Versión, SHA<br/>y migración objetivo"]
+        SemVer["🏷️ Versión y SHA"]
     end
 
     subgraph S2 ["Stage 2: Quality Gate & SAST"]
@@ -183,11 +183,13 @@ flowchart LR
     VM --> Smoke
 ```
 
-1. **Versioning** define etiqueta, SHA y migración objetivo.
+1. **Versioning** define la etiqueta SemVer y el SHA que producen las imágenes.
 2. **QualityGate** ejecuta análisis y pruebas con PostgreSQL descartable; un fallo bloquea Packaging y despliegue.
 3. **Packaging** publica backend, frontend y migrador del mismo SHA.
 4. **PostgreSQL** respalda y migra el esquema en EC2, y publica evidencia.
 5. **CD** despliega la aplicación compatible y verifica readiness.
+
+El pipeline no selecciona fases ni IDs de migración. Packaging genera un manifiesto desde las migraciones EF del código; PostgreSQL aplica en orden todas las que falten hasta la última incluida en ese build. Los releases P1/P2/P3 que aparecen en la bitácora son evidencia histórica, no parámetros del pipeline.
 
 P1, P2 y P3 completaron los cinco stages en secuencia; P3 es la versión activa. Build91 reportó 49/49 unitarias y 13/13 integración, incluyendo 503 por Nginx al detener PostgreSQL. También pasaron la prueba manual de resiliencia y el rollback P3→P1→P3.
 
@@ -201,11 +203,11 @@ Los secretos `GHCR_PUSH_TOKEN`, `GHCR_PULL_TOKEN` y `GITHUB_RELEASE_TOKEN` ya es
 
 ### Despliegue en EC2 mediante Azure Pipelines
 
-El flujo tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL → CD`. Para solicitar un despliegue manual, iniciar una ejecución desde Azure DevOps con `deployDemo=true` y elegir `releasePhase`. El default es P3 para no retroceder releases; una primera instalación debe seleccionar P1 explícitamente. P3 (`3.1.6-build.91`) está activo; ver [estado y evidencia en la bitácora](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
+El flujo tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL → CD`. Para solicitar un despliegue manual en EC2, iniciar una ejecución desde Azure DevOps con `deployDemo=true`. No hay selector de fase ni destino de migración: una base nueva recibe todas las migraciones y una existente avanza solo por las pendientes. P3 (`3.1.6-build.91`) es el último despliegue documentado; ver la [bitácora histórica](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
 ### Pruebas locales de integración
 
-En un entorno Linux con Docker disponible, ejecuta el script de integración. Construye las imágenes P1/P2/P3 y el migrador, y prueba contra PostgreSQL descartable; no usa la base EC2:
+En un entorno Linux con Docker disponible, ejecuta el script de integración. Construye una imagen backend y el migrador, y prueba la aplicación incremental contra PostgreSQL descartable; no usa la base EC2:
 
 ```bash
 bash scripts/test-postgresql.sh

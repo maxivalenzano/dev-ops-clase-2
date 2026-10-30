@@ -1,12 +1,8 @@
-"""Exercise the real release images and EF bundle against disposable PostgreSQL.
-
-Run on a Linux Docker CI agent. No production services or volumes are used.
-"""
+"""Exercise the built migration bundle against disposable PostgreSQL containers."""
 import concurrent.futures
 import json
 import os
 from pathlib import Path
-import re
 import secrets
 import subprocess
 import tempfile
@@ -27,7 +23,6 @@ RESULTS = []
 def command(*args, data=None, check=True):
     result = subprocess.run(args, input=data, text=True, capture_output=True, cwd=ROOT)
     if check and result.returncode:
-        # Test credentials are random and disposable; still keep command arguments out of logs.
         raise RuntimeError(result.stderr[-3000:] or result.stdout[-3000:])
     return result
 
@@ -38,12 +33,12 @@ def sql(statement, database='lab', user='postgres', check=True):
                    data=statement, check=check)
 
 
-def wait(check, seconds=60):
+def wait(action, seconds=60):
     deadline = time.monotonic() + seconds
     last = None
     while time.monotonic() < deadline:
         try:
-            return check()
+            return action()
         except Exception as exc:
             last = exc
             time.sleep(1)
@@ -51,7 +46,6 @@ def wait(check, seconds=60):
 
 
 def http(port, path='/api/ready', method='GET', body=None, status=200):
-    started = time.monotonic()
     request = urllib.request.Request(
         f'http://127.0.0.1:{port}{path}', method=method,
         data=json.dumps(body).encode() if body is not None else None,
@@ -61,7 +55,7 @@ def http(port, path='/api/ready', method='GET', body=None, status=200):
             code, payload = response.status, response.read()
     except urllib.error.HTTPError as exc:
         code, payload = exc.code, exc.read()
-    assert code == status, (path, code, f'{time.monotonic() - started:.3f}s', payload[:500])
+    assert code == status, (path, code, payload[:500])
     return json.loads(payload) if payload else None
 
 
@@ -77,17 +71,19 @@ def record(name, check):
 
 
 def main():
-    phases = json.loads((ROOT / 'backend/schema-compatibility.json').read_text())
-    image = re.search(r'^    image: (postgres:[^\s]+)',
-                      (ROOT / 'compose.data.yaml').read_text(), re.M).group(1)
+    manifest = json.loads(Path(os.environ['MIGRATION_MANIFEST']).read_text())
+    migrations = manifest['migrations']
+    assert migrations and manifest['latestMigration'] == migrations[-1]
+    image = next(line.split(': ', 1)[1] for line in (ROOT / 'compose.data.yaml').read_text().splitlines()
+                 if line.strip().startswith('image: postgres:'))
     command('docker', 'network', 'create', NETWORK)
     with tempfile.TemporaryDirectory(prefix=RUN) as directory:
         work = Path(directory)
         work.chmod(0o755)  # Traversable by the non-root application UID inside Docker.
         password = secrets.token_hex(24)
         (work / 'postgres.env').write_text('POSTGRES_DB=lab\nPOSTGRES_PASSWORD=' + password)
-        for name, user in [('migrator', 'lab_migrator'), ('app', 'lab_app')]:
-            file = work / name
+        for role, user in [('migrator', 'lab_migrator'), ('app', 'lab_app')]:
+            file = work / role
             file.write_text(f'Host=postgres;Database=lab;Username={user};Password={password};'
                             'Maximum Pool Size=5;Timeout=3;Command Timeout=10;'
                             'Options=-c lock_timeout=2000 -c statement_timeout=10000')
@@ -95,7 +91,6 @@ def main():
         command('docker', 'run', '-d', '--name', PG, '--network', NETWORK,
                 '--network-alias', 'postgres', '--env-file', str(work / 'postgres.env'), image)
         CONTAINERS.append(PG)
-        # initdb briefly runs a Unix-socket-only server; wait for the final TCP listener.
         wait(lambda: command('docker', 'exec', PG, 'pg_isready', '-h', '127.0.0.1',
                              '-U', 'postgres', '-d', 'lab'))
         wait(lambda: sql('SELECT 1'))
@@ -107,48 +102,41 @@ def main():
             'ALTER DEFAULT PRIVILEGES FOR ROLE lab_migrator IN SCHEMA public '
             'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO lab_app;')
 
-        def migrate(phase=None, target=None, check=True):
-            return command('docker', 'run', '--rm', '--network', NETWORK,
-                           '-v', f'{work / "migrator"}:/run/secrets/db_connection:ro',
-                           '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
-                           'devops-migrator:test', target or phases[phase]['targetMigration'], check=check)
+        def migrate(target=None, check=True, connection='migrator'):
+            args = ['docker', 'run', '--rm', '--network', NETWORK,
+                    '-v', f'{work / connection}:/run/secrets/db_connection:ro',
+                    '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
+                    'devops-migrator:test']
+            if target:
+                args.append(target)
+            return command(*args, check=check)
 
-        def start_app(phase, index=1):
-            name = RUN + '-' + phase.lower() + '-' + str(index)
+        def start_app(index):
+            name = f'{RUN}-backend-{index}'
             command('docker', 'run', '-d', '--name', name, '--network', NETWORK,
                     '--dns-option', 'timeout:1', '--dns-option', 'attempts:1',
                     '-p', '127.0.0.1::3000', '-e', 'INSTANCE_NAME=' + name,
                     '-v', f'{work / "app"}:/run/secrets/db_connection:ro',
                     '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
-                    'devops-backend:test-' + phase)
+                    'devops-backend:test')
             CONTAINERS.append(name)
             binding = json.loads(command('docker', 'inspect', name).stdout)[0]
             port = binding['NetworkSettings']['Ports']['3000/tcp'][0]['HostPort']
             wait(lambda: http(port))
             return name, port
 
-        def history():
-            return sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1').stdout.strip()
+        def history(database='lab'):
+            return sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1',
+                       database=database).stdout.splitlines()
 
-        record('P1: migrate empty database using the final bundle image', lambda: migrate('P1'))
-        _, p1 = start_app('P1')
-        task = http(p1, '/api/tasks', 'POST', {'title': 'Existing P1 task'}, 201)
-        marker = task['id']
-        task = http(p1, '/api/tasks/' + marker)
-        record('P2: additive migration preserves existing records', lambda: migrate('P2'))
-        _, p2 = start_app('P2')
-        assert http(p2, '/api/tasks/' + marker)['title'] == task['title']
-        sql(f"UPDATE tasks SET priority = NULL WHERE id = '{marker}'")
-        assert http(p2, '/api/tasks/' + marker)['priority'] == 2
+        first_migration = migrations[0]
+        marker = str(uuid.uuid4())
+        record('Migrate the initial schema, then store a row before later migrations', lambda: (
+            migrate(first_migration),
+            sql("INSERT INTO tasks (id,title,is_completed,created_by_node,created_at) "
+                f"VALUES ('{marker}','before-incremental-upgrade',false,'legacy',now());")))
 
-        def failed_not_null():
-            result = sql('ALTER TABLE tasks ALTER COLUMN priority SET NOT NULL', check=False)
-            assert result.returncode != 0
-            assert phases['P2']['targetMigration'] in history()
-            assert phases['P3']['targetMigration'] not in history()
-        record('Controlled failure: NOT NULL before backfill is rejected', failed_not_null)
-
-        def ddl_timeout():
+        def lock_timeout():
             blocker = subprocess.Popen(
                 ['docker', 'exec', '-i', PG, 'psql', '-X', '-v', 'ON_ERROR_STOP=1',
                  '-U', 'postgres', '-d', 'lab'], stdin=subprocess.PIPE,
@@ -156,71 +144,66 @@ def main():
             blocker.stdin.write('BEGIN; LOCK TABLE tasks IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(12); COMMIT;\n')
             blocker.stdin.close()
             try:
-                def lock_acquired():
-                    assert sql("SELECT count(*) FROM pg_locks WHERE relation='tasks'::regclass "
-                               "AND mode='AccessExclusiveLock' AND granted").stdout.strip() == '1'
-                wait(lock_acquired, 10)
-                result = migrate('P3', check=False)
-                assert result.returncode != 0, 'DDL must time out under a prolonged lock'
+                wait(lambda: sql("SELECT count(*) FROM pg_locks WHERE relation='tasks'::regclass "
+                                 "AND mode='AccessExclusiveLock' AND granted").stdout.strip() == '1', 10)
+                result = migrate(check=False)
+                assert result.returncode != 0, 'Pending DDL must time out under a prolonged lock'
             finally:
                 blocker.wait(timeout=30)
-            assert phases['P3']['targetMigration'] not in history()
-        record('DDL lock timeout prevents an indefinite deployment', ddl_timeout)
-        sql(f"UPDATE tasks SET priority = 3, is_completed = true WHERE id = '{marker}'")
-        record('P3: backfill, constraints and reversible demo-state migration', lambda: migrate('P3'))
-        _, p3 = start_app('P3')
-        upgraded = http(p3, '/api/tasks/' + marker)
-        for key in ('id', 'title', 'createdAt', 'createdByNode'):
-            assert upgraded[key] == task[key], key
-        assert upgraded['isCompleted'] is False
-        assert upgraded['priority'] == 1
+            applied = history()
+            assert applied == migrations[:len(applied)] and len(applied) < len(migrations)
+        record('Pending migrations fail safely when DDL cannot acquire its lock', lock_timeout)
 
-        def reversible_state_migration():
-            migrate(target='20261025000400_004_RequirePriority')
-            restored = http(p3, '/api/tasks/' + marker)
-            assert restored['priority'] == 3
-            assert restored['isCompleted'] is True
-            migrate('P3')
-            reset = http(p3, '/api/tasks/' + marker)
-            assert reset['priority'] == 1
-            assert reset['isCompleted'] is False
-        record('Down restores the previous priority and completion state; Up reapplies the test state', reversible_state_migration)
+        record('Apply every pending migration in order and preserve existing rows', lambda: migrate())
+        assert history() == migrations
+        row = json.loads(sql(f"SELECT row_to_json(t) FROM tasks t WHERE id='{marker}'").stdout)
+        assert row['title'] == 'before-incremental-upgrade' and row['priority'] == 2
+
+        _, port = start_app(1)
+        record('Application readiness and read of pre-migration data', lambda: (
+            http(port), http(port, '/api/tasks/' + marker)))
+
+        def api_contract():
+            created = http(port, '/api/tasks', 'POST', {'title': 'new task', 'priority': 3}, 201)
+            assert created['priority'] == 3
+            assert http(port, '/api/tasks/' + created['id'] + '/toggle', 'PUT')['isCompleted'] is True
+            http(port, '/api/tasks/' + created['id'], 'DELETE', status=204)
+            for invalid in (0, 9):
+                http(port, '/api/tasks', 'POST', {'title': 'invalid', 'priority': invalid}, 400)
+            assert sql('CREATE TABLE forbidden(id int)', user='lab_app', check=False).returncode != 0
+        record('Task API constraints and restricted database privileges', api_contract)
 
         def idempotence():
             before = history()
-            migrate('P3')
+            migrate()
             assert history() == before
-        record('Second bundle execution leaves history and data unchanged', idempotence)
+        record('Repeated bundle execution is idempotent', idempotence)
 
-        def constraints():
-            for value in ('NULL', '0', '9'):
-                assert sql(f"UPDATE tasks SET priority={value} WHERE id='{marker}'", check=False).returncode != 0
-            for value in (0, 9):
-                http(p3, '/api/tasks', 'POST', {'title': 'Invalid', 'priority': value}, 400)
-            assert sql('CREATE TABLE forbidden(id int)', user='lab_app', check=False).returncode != 0
-        record('Database constraints, API validation and DML-only app privileges', constraints)
+        def backup_restore():
+            command('docker', 'exec', PG, 'pg_dump', '-U', 'postgres', '-d', 'lab', '-Fc',
+                    '-f', '/tmp/recovery.dump')
+            expected = sql('SELECT row_to_json(t) FROM tasks t ORDER BY id').stdout
+            sql('CREATE DATABASE restore_test OWNER lab_migrator', database='postgres')
+            command('docker', 'exec', PG, 'pg_restore', '-U', 'postgres', '-d', 'restore_test',
+                    '--exit-on-error', '/tmp/recovery.dump')
+            assert sql('SELECT row_to_json(t) FROM tasks t ORDER BY id', 'restore_test').stdout == expected
+            assert history('restore_test') == migrations
+        record('Backup restores data and migration history into a separate database', backup_restore)
 
-        def old_image():
-            http(p1)
-            item = http(p1, '/api/tasks', 'POST', {'title': 'P1 on P3'}, 201)
-            assert http(p3, '/api/tasks/' + item['id'])['priority'] == 2
-            http(p1, '/api/tasks/' + item['id'] + '/toggle', 'PUT')
-            http(p1, '/api/tasks/' + item['id'], 'DELETE', status=204)
-        record('Actual P1 image supports CRUD on P3 schema (application rollback)', old_image)
-
-        replicas = [p3] + [start_app('P3', i)[1] for i in (2, 3)]
+        replicas = [port] + [start_app(index)[1] for index in (2, 3)]
 
         def concurrency():
-            for port in replicas:
-                assert http(port, '/api/tasks/' + marker)['id'] == marker
+            for replica in replicas:
+                assert http(replica, '/api/tasks/' + marker)['id'] == marker
             with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
-                list(pool.map(lambda i: http(replicas[i % 3], '/api/tasks/' + marker + '/toggle', 'PUT'), range(30)))
-            assert http(p3, '/api/tasks/' + marker)['isCompleted'] is False
-        record('Three replicas share data and 30 concurrent toggles lose no updates', concurrency)
+                list(pool.map(lambda index: http(replicas[index % 3],
+                                                 '/api/tasks/' + marker + '/toggle', 'PUT'), range(30)))
+            assert http(port, '/api/tasks/' + marker)['isCompleted'] is False
+        record('Three application replicas share data and concurrent writes', concurrency)
 
-        # Match the production gateway deadlines so a slow DB failure cannot turn 503 into 504.
         gateway = RUN + '-gateway'
-        upstream = '\n'.join(f'server {RUN}-p3-{i}:3000 max_fails=2 fail_timeout=10s;' for i in (1, 2, 3))
+        backend_names = [f'{RUN}-backend-{index}' for index in (1, 2, 3)]
+        upstream = '\n'.join(f'server {name}:3000 max_fails=2 fail_timeout=10s;' for name in backend_names)
         config = work / 'nginx.conf'
         config.write_text('upstream backends { ' + upstream + ' }\n'
                           'server { listen 8080; location / { proxy_pass http://backends; '
@@ -234,34 +217,19 @@ def main():
         gateway_port = binding['NetworkSettings']['Ports']['8080/tcp'][0]['HostPort']
         wait(lambda: http(gateway_port))
 
-        def persistence_and_outage():
+        def database_outage():
             command('docker', 'stop', PG)
             try:
-                http(p3, status=503)
-                http(p3, '/api/tasks', 'POST', {'title': 'Must not use fallback'}, 503)
+                http(port, status=503)
+                http(port, '/api/tasks', 'POST', {'title': 'must-not-diverge'}, 503)
                 http(gateway_port, status=503)
-                http(gateway_port, '/api/tasks', 'POST', {'title': 'Must not use fallback'}, 503)
-                http(p3, '/api/health')
+                http(gateway_port, '/api/tasks', 'POST', {'title': 'must-not-diverge'}, 503)
+                http(port, '/api/health')
             finally:
                 command('docker', 'start', PG)
-            wait(lambda: http(p3))
-            assert http(p3, '/api/tasks/' + marker)['id'] == marker
-            assert sql("SELECT count(*) FROM tasks WHERE title='Must not use fallback'").stdout.strip() == '0'
-        record('Database outage returns 503 through Nginx; restart retains data and reconnects', persistence_and_outage)
-
-        def restore_and_down():
-            sql(f"UPDATE tasks SET priority=3 WHERE id='{marker}'")
-            command('docker', 'exec', PG, 'pg_dump', '-U', 'postgres', '-d', 'lab', '-Fc', '-f', '/tmp/recovery.dump')
-            expected = sql('SELECT row_to_json(t) FROM tasks t ORDER BY id').stdout
-            command('docker', 'exec', PG, 'createdb', '-U', 'postgres', 'restore_test')
-            command('docker', 'exec', PG, 'pg_restore', '-U', 'postgres', '-d', 'restore_test', '--exit-on-error', '/tmp/recovery.dump')
-            assert sql('SELECT row_to_json(t) FROM tasks t ORDER BY id', 'restore_test').stdout == expected
-            assert sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'restore_test').stdout.strip() == history()
-            migrate('P1')  # Deliberate destructive Down only in this disposable database.
-            migrate('P3')
-            assert http(p3, '/api/tasks/' + marker)['priority'] == 1
-            assert sql(f"SELECT priority FROM tasks WHERE id='{marker}'", 'restore_test').stdout.strip() == '3'
-        record('Backup restores separately; Down to P1 drops priority while P5 Down restores its saved state', restore_and_down)
+            wait(lambda: http(port))
+            assert sql("SELECT count(*) FROM tasks WHERE title='must-not-diverge'").stdout.strip() == '0'
+        record('Database outage returns 503 through the API and gateway, then reconnects', database_outage)
 
         def sql_artifact():
             name = RUN + '-sql-artifact'
@@ -273,21 +241,20 @@ def main():
             sql('CREATE DATABASE freshsql OWNER lab_migrator', database='postgres')
             statement = (work / 'forward.sql').read_text(encoding='utf-8-sig')
             sql(statement, database='freshsql', user='lab_migrator')
-            before = sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout
+            applied = history('freshsql')
             sql(statement, database='freshsql', user='lab_migrator')
-            assert sql('SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1', 'freshsql').stdout == before
-            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'freshsql').stdout.strip() == '5'
-        record('Published forward SQL executes twice on a separate empty database', sql_artifact)
+            assert history('freshsql') == applied == migrations
+        record('Published idempotent SQL applies every migration to an empty database', sql_artifact)
 
-        def fresh_to_latest():
+        def fresh_bundle():
             sql('CREATE DATABASE fresh OWNER lab_migrator', database='postgres')
             connection = work / 'migrator'
             connection.chmod(0o644)
             connection.write_text(connection.read_text().replace('Database=lab;', 'Database=fresh;'))
             connection.chmod(0o444)
-            migrate('P3')
-            assert sql('SELECT count(*) FROM "__EFMigrationsHistory"', 'fresh').stdout.strip() == '5'
-        record('Empty database migrates directly to latest P3', fresh_to_latest)
+            migrate(connection='migrator')
+            assert history('fresh') == migrations
+        record('An empty database migrates directly to the latest release schema', fresh_bundle)
 
 
 if __name__ == '__main__':
@@ -296,10 +263,10 @@ if __name__ == '__main__':
     finally:
         if any(error is not None for _, _, error in RESULTS):
             for name in CONTAINERS:
-                if '-p3-' in name or name.endswith('-gateway'):
+                if name.endswith('-gateway') or '-backend-' in name:
                     logs = command('docker', 'logs', '--tail', '60', name, check=False)
                     print('Failure diagnostics:', name, logs.stdout, logs.stderr, flush=True)
-        suite = ET.Element('testsuite', name='PostgreSQL migrations', tests=str(len(RESULTS)),
+        suite = ET.Element('testsuite', name='PostgreSQL incremental migrations', tests=str(len(RESULTS)),
                            failures=str(sum(error is not None for _, _, error in RESULTS)))
         for name, elapsed, error in RESULTS:
             case = ET.SubElement(suite, 'testcase', name=name, time=f'{elapsed:.3f}')

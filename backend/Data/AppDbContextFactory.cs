@@ -14,6 +14,6 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
             ? "Host=localhost;Database=devops;Username=devops_migrator;Timeout=5;Command Timeout=30"
             : DatabaseConfiguration.ConnectionString();
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connection).Options;
-        return new AppDbContext(options, new SchemaCompatibility(Environment.GetEnvironmentVariable("EF_SCHEMA_PHASE") ?? "P3"));
+        return new AppDbContext(options);
     }
 }
