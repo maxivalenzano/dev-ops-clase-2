@@ -11,7 +11,7 @@ namespace Backend.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // Keep the data transformation explicit in 003; SET NOT NULL must fail if backfill was skipped.
-            // The existing DEFAULT 2 remains in place for P1 inserts that omit this column.
+            // Keep the existing DEFAULT 2 so older application versions that omit this column remain compatible.
             migrationBuilder.Sql("ALTER TABLE tasks ALTER COLUMN priority SET NOT NULL;");
             migrationBuilder.AddCheckConstraint(
                 name: "ck_tasks_priority",

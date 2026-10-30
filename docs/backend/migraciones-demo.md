@@ -1,10 +1,10 @@
 # Guion didáctico: migraciones PostgreSQL con EF Core
 
-**Estado:** P1, P2 y P3 pasaron CI y se desplegaron sucesivamente en EC2; P3 es la versión activa. Build91 pasó con 49/49 unitarias y 13/13 integración, incluido HTTP 503 vía Nginx al caer PostgreSQL. También pasaron resiliencia, restore off-host y rollback P3→P1→P3. Las fases y sus objetivos exactos se declaran en [`schema-compatibility.json`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/backend/schema-compatibility.json). El [plan de integración](./plan-integracion-postgresql-ef) conserva decisiones y criterios de aceptación.
+**Historial:** P1, P2 y P3 fueron releases usados en la demostración inicial de PostgreSQL; P3 es el último despliegue registrado. Build91 pasó con 49/49 unitarias y 13/13 integración, incluido HTTP 503 vía Nginx al caer PostgreSQL. También pasaron resiliencia, restore off-host y rollback P3→P1→P3. Esas fases describen la historia; el pipeline actual ya no tiene selector ni objetivos por fase. El [plan de integración](./plan-integracion-postgresql-ef) conserva decisiones y criterios de aceptación.
 
 ## Objetivo
 
-Mostrar cómo evoluciona PostgreSQL mientras varias versiones de la API siguen atendiendo solicitudes. P1 crea el esquema inicial; P2 agrega prioridad opcional; P3 completa datos previos y endurece las reglas. Backend, frontend y migrador se construyen desde un único SHA y etiqueta. `TASK_RELEASE` selecciona la versión del backend y `VITE_TASK_RELEASE` la del frontend.
+Mostrar cómo evoluciona PostgreSQL con migraciones versionadas: crear la tabla de tareas, agregar una prioridad opcional, completar datos previos y exigir prioridades válidas. Para explicar estos cambios se usan los nombres de las operaciones y los métodos `Up` y `Down`; P1/P2/P3 son etiquetas de runs históricos. Backend, frontend y migrador se construyen desde un único SHA y etiqueta, con un solo modelo de aplicación.
 
 ## ¿Qué es una migración?
 
@@ -17,7 +17,9 @@ Una migración describe un cambio versionado del esquema: tablas, columnas, índ
 - Ambos son operaciones definidas en la migración; no son un backup ni una reversión transaccional general de la aplicación.
 - El artefacto de migración se genera y revisa en Packaging. Las pruebas automatizadas contra PostgreSQL real descartable se ejecutan con `bash scripts/test-postgresql.sh`.
 
-## Releases P1, P2 y P3
+## Releases históricos P1, P2 y P3
+
+Estas etiquetas organizaban la demostración original. No son parámetros ni destinos del pipeline actual.
 
 | Release | Migración objetivo | Evolución | Qué enseña |
 | --- | --- | --- | --- |
@@ -27,16 +29,18 @@ Una migración describe un cambio versionado del esquema: tablas, columnas, índ
 
 Un default actúa cuando se omite el campo; no reemplaza un NULL explícito. En P2 se verificó con el marcador temporal: SQL confirmó `priority = NULL` y la API P2 lo representó como prioridad 2 (media). En P3 el backfill completó NULL como 2, y luego el marcador sobrevivió el rollback P3→P1→P3 con prioridad 3. El marcador se eliminó al finalizar; la consulta final dejó cero tareas.
 
-## Pipeline y parámetros
+## Pipeline incremental actual
 
 `azure-pipelines.yml` contiene cinco stages en orden: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`.
 
 - `deployDemo`: booleano, valor predeterminado `false`; debe seleccionarse `true` para solicitar despliegue manual en EC2.
-- `releasePhase`: `P1`, `P2` o `P3`, por defecto `P3` para que un build nuevo no retroceda la versión de aplicación. La primera instalación debe seleccionar explícitamente `P1`; el script de preparación rechaza comenzar en P2/P3 sin una base P1 previa. Después, ejecutar P2 y P3 como releases separados, con `deployDemo=true` y la fase deseada.
-- `QualityGate` ejecuta [`test-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.sh), que construye backend para cada fase y el migrador; [`test-postgresql.py`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.py) prueba las imágenes contra PostgreSQL descartable.
-- `Packaging` publica backend, frontend y migrador bajo la misma etiqueta/SHA; los args son `TASK_RELEASE` y `VITE_TASK_RELEASE`.
-- `PostgreSQL` ejecuta [`prepare-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/prepare-postgresql.sh), incluyendo respaldo con [`backup-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/backup-postgresql.sh), migración y validaciones.
-- `CD` ejecuta [`deploy-ec2.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/deploy-ec2.sh), consume el recibo correspondiente a `BUILD_ID`, `IMAGE_TAG`, `SOURCE_COMMIT`, `RELEASE_PHASE` y `MIGRATION_TARGET`, y no vuelve a migrar.
+- `QualityGate` ejecuta [`test-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.sh), que construye una imagen backend y el migrador; [`test-postgresql.py`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.py) prueba el avance incremental contra PostgreSQL descartable.
+- `Packaging` publica backend, frontend y migrador bajo la misma etiqueta/SHA. Además genera `migrations.json` desde los atributos de migración producidos por EF Core; no declara una lista de IDs en YAML.
+- `PostgreSQL` ejecuta [`prepare-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/prepare-postgresql.sh), incluyendo respaldo con [`backup-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/backup-postgresql.sh), y corre el bundle sin argumento de destino. EF aplica en orden todas las migraciones pendientes hasta la última del build.
+- Los historiales del build y de la base deben compartir una cadena completa de prefijo. Si la base ya está más avanzada, se conserva y no se ejecutan `Down`; después, el stage verifica que estén aplicadas todas las migraciones del build y publica ambos historiales.
+- `CD` ejecuta [`deploy-ec2.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/deploy-ec2.sh), consume el recibo de `BUILD_ID`, `IMAGE_TAG`, `SOURCE_COMMIT` y esquema verificado, y no vuelve a migrar.
+
+Para agregar un cambio de esquema, actualizar el modelo y generar una migración EF con nombre descriptivo. Revisar el `Up` generado y agregar el backfill o los pasos expand/contract necesarios. Al incluir esos archivos en el mismo SHA, Packaging incorpora automáticamente el nuevo ID al manifiesto; PostgreSQL lo aplica después de las migraciones ya registradas, sin cambios al YAML ni a un selector de destino.
 
 ```mermaid
 flowchart LR
@@ -50,7 +54,7 @@ flowchart LR
 
 | Tiempo | Paso | Pantalla y verificación que se muestra |
 | --- | --- | --- |
-| 0:00–1:30 | Contexto y parámetros | Azure Pipelines: cinco stages, `deployDemo` y `releasePhase`. Explicar que P3 es el default preventivo; para primera instalación se elige P1 explícitamente. |
+| 0:00–1:30 | Contexto y parámetros | Azure Pipelines: cinco stages y `deployDemo`; las fases de la demostración original son runs históricos. |
 | 1:30–3:00 | P1: primera instalación | Mostrar el run P1 guardado: esquema inicial, readiness y recibo BuildId/SHA/objetivo. No hace falta lanzar otra vez el pipeline durante la exposición. |
 | 3:00–4:30 | CRUD e historial | Tablero y evidencia capturada: crear/listar/completar tarea; mostrar `tasks` y `__EFMigrationsHistory`, confirmando estado compartido y datos preservados. |
 | 4:30–6:30 | P2: cambio aditivo | Mostrar el run P2 y el selector Baja/Media/Alta. Revisar la evidencia de compatibilidad P1 con esquema 002 y `priority` nullable/default. |
@@ -60,11 +64,11 @@ flowchart LR
 | 11:00–13:00 | Rollback de aplicación vs `Down` | Mostrar la secuencia manual real P3→P1→P3: el esquema 004 quedó intacto, la tarea se preservó y el retorno a P3 usó el recibo sin remigrar. Contrastar: `Down` quita columna/valores y no reconstruye prioridades; no ejecutarlo para rollback de aplicación. |
 | 13:00–15:00 | Backup y restore | Mostrar backup91 descargado off-host, SHA-256 y restore en base nueva `restore_offhost_91_20261025`, con fingerprint coincidente y 0,462 s medidos para una fila. Ese tiempo no es un RTO general y el restore aislado no hace cutover productivo. |
 
-La exposición usa evidencia guardada de los tres releases y pruebas, por lo que no requiere esperar que terminen tres pipelines durante la clase. Los artefactos y logs verificables están en las ejecuciones de Azure Pipelines y la bitácora. El rollback manual P3→P1→P3 y la prueba de resiliencia también se completaron.
+La exposición puede mostrar los runs históricos y luego explicar el flujo actual, que calcula su plan desde las migraciones EF versionadas. Los artefactos y logs históricos están en las ejecuciones de Azure Pipelines y la bitácora. El rollback manual de aplicación y la prueba de resiliencia también se completaron.
 
 Los scripts de EC2 necesitan variables y reserva de release que proporciona el pipeline; no deben invocarse a mano con valores arbitrarios. PostgreSQL se mantiene en el proyecto persistente [`compose.data.yaml`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/compose.data.yaml), separado del rollback de aplicación. Los secretos se generan fuera de Git bajo `/opt/devops-lab/secrets` (directorio 0700, archivos 0444). La aplicación consume el archivo montado mediante `DATABASE_CONNECTION_FILE`.
 
-La aplicación previa debe tolerar el esquema aditivo P2 durante la ventana entre migración y despliegue. La reserva serializa esa ventana para que releases no intercalen cambios.
+La aplicación previa debe seguir funcionando con el nuevo esquema durante la ventana entre migración y despliegue. La reserva serializa esa ventana para que releases no intercalen cambios; por eso las migraciones de despliegue deben preservar compatibilidad hacia atrás y avanzar con patrón expand/contract.
 
 ## Tres operaciones diferentes de recuperación
 
@@ -78,7 +82,7 @@ Si una migración falla, consultar `__EFMigrationsHistory` y el esquema real; no
 
 ## Verificaciones
 
-El script de CI comprueba migración desde cero y desde fases previas con datos, repetición idempotente, restricciones, CRUD compartido y compatibilidad de las imágenes. En EC2, el stage PostgreSQL exige consulta autenticada, esquema objetivo compatible, backup con restauración comprobada en base separada y recibo sin secretos. CD verifica las tres réplicas, readiness y datos; si PostgreSQL falla, CD no se ejecuta.
+El script de CI comprueba migración desde un esquema inicial con datos, aplicación de pendientes, repetición idempotente, restricciones, CRUD compartido, restauración y avance de una base vacía hasta la última migración. En EC2, PostgreSQL exige consulta autenticada, historial en orden, backup con restauración comprobada en base separada y recibo sin secretos. CD verifica las tres réplicas, readiness y datos; si PostgreSQL falla, CD no se ejecuta.
 
 La prueba de resiliencia enseña por qué deben coordinarse los timeouts: un intento inicial con timeout de conexión de 2 s aún produjo 504 en Nginx de 5 s porque DNS Unix/musl bloqueó. El commit `07e6c9a` añadió deadline ASP.NET de 2 s y propagación de cancelación a EF/Npgsql para tareas y readiness, dejando Chaos Lab fuera; `CancellationTimeout` es 500 ms. El commit `bdb2dca` agregó `dns_opt` con `timeout:1` y `attempts:1` a los backends y CI. Build91 pasó HTTP 503 vía Nginx y la verificación manual `--resilience` también pasó, con recuperación del servicio y datos.
 

@@ -17,7 +17,7 @@ EC2 está en P3 (`3.1.6-build.91`) con esquema `20261025000400_004_RequirePriori
 
 Build89 y build90 P3 fallaron en QualityGate: el POST de prueba a través de Nginx recibió 504 donde se esperaba 503 con PostgreSQL detenido; los stages posteriores quedaron omitidos. Build90 mostró resolución DNS Unix/musl bloqueante. Build91 añadió `dns_opt` y completó los cinco stages, con 49/49 unitarias y 13/13 integración, incluido 503 vía Nginx. Después también pasaron las pruebas manuales de resiliencia y rollback P3→P1→P3.
 
-El pipeline actual tiene cinco stages: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`. `releasePhase` tiene default P3 para evitar retroceder releases; para una instalación inicial hay que seleccionar P1 explícitamente. La tarea marcador se limpió y la consulta final dejó cero tareas. Evidencia detallada por fase en la [bitácora PostgreSQL/EF](../bitacora/2026-10-25-postgresql-ef-migraciones).
+El pipeline actual tiene cinco stages: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`. Packaging obtiene la lista de IDs desde las migraciones EF del build; el stage PostgreSQL aplica automáticamente las pendientes y conserva una base que ya esté más avanzada. Rechaza historiales divergentes y no ejecuta `Down`. No existe selector de fase ni un ID objetivo fijo. P1/P2/P3 describen despliegues históricos en la [bitácora PostgreSQL/EF](../bitacora/2026-10-25-postgresql-ef-migraciones).
 
 ## Pruebas y desarrollo local
 

@@ -42,7 +42,6 @@ export function getNodeStyle(nodeName) {
 }
 
 export default function TaskBoard({ onLogEvent }) {
-  const hasPriority = import.meta.env.VITE_TASK_RELEASE !== "P1";
   const [tasks, setTasks] = useState([]);
   const [servedByNode, setServedByNode] = useState(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -114,7 +113,7 @@ export default function TaskBoard({ onLogEvent }) {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(hasPriority ? { title, priority } : { title })
+        body: JSON.stringify({ title, priority })
       });
       const latency = Math.round(performance.now() - start);
 
@@ -306,11 +305,11 @@ export default function TaskBoard({ onLogEvent }) {
             onChange={(e) => setNewTitle(e.target.value)}
             disabled={isSubmitting}
           />
-          {hasPriority && <select aria-label="Prioridad" value={priority} onChange={(e) => setPriority(Number(e.target.value))} disabled={isSubmitting}>
+          <select aria-label="Prioridad" value={priority} onChange={(e) => setPriority(Number(e.target.value))} disabled={isSubmitting}>
             <option value={1}>Baja</option>
             <option value={2}>Media</option>
             <option value={3}>Alta</option>
-          </select>}
+          </select>
           <button type="submit" className="primary" disabled={isSubmitting || !newTitle.trim()}>
             {isSubmitting ? '⏳ Guardando en PostgreSQL...' : '➕ Guardar en Cluster'}
           </button>
@@ -384,7 +383,7 @@ export default function TaskBoard({ onLogEvent }) {
                   <div className="task-content">
                     <div className="task-title-row">
                       <span className="task-title">{task.title}</span>
-                      {hasPriority && <span className="node-badge">{["", "Baja", "Media", "Alta"][task.priority ?? 2]}</span>}
+                      <span className="node-badge">{["", "Baja", "Media", "Alta"][task.priority ?? 2]}</span>
                     </div>
 
                     <div className="task-metadata">
