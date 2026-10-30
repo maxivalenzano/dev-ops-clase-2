@@ -119,8 +119,8 @@ Ampliar `azure-pipelines.yml` a cinco stages. Por decisión del usuario, Postgre
 | Stage | Trabajo nuevo |
 | --- | --- |
 | Versioning | Identificar versión, SHA y migración objetivo |
-| Quality Gate | PostgreSQL temporal del mismo major; migración desde cero y desde esquema anterior con datos; CRUD, restricciones y compatibilidad; publicar resultados |
-| Packaging | Imágenes frontend/backend/migrador del mismo SHA; bundle EF, SQL de avance y SQL inverso para revisión, manifiesto de compatibilidad |
+| Quality Gate | Pruebas unitarias, build de frontend, SonarCloud/Trivy; publicar el `dist` validado para Packaging |
+| Packaging | Construir imágenes backend/frontend/migrador; probar las imágenes reales y el bundle EF contra PostgreSQL temporal; publicar OCI solo si pasan; bundle, SQL idempotente y manifiesto |
 | PostgreSQL | Preflight, preparar/verificar motor, backup, ejecutar migrador EF y validar esquema; publicar evidencia |
 | CD | Comprobar resultado de PostgreSQL, desplegar aplicación, verificar y registrar manifest final |
 

@@ -138,7 +138,7 @@ Haz clic en la pestaña **Laboratorio de Caos** para probar la robustez de Nginx
 
 ## 🔄 4. Pipeline CI/CD y DevSecOps
 
-El pipeline actual de **Azure DevOps** (`azure-pipelines.yml`) tiene cinco stages y bloquea el despliegue cuando falla QualityGate o PostgreSQL:
+El pipeline actual de **Azure DevOps** (`azure-pipelines.yml`) tiene cinco stages y bloquea el despliegue cuando falla QualityGate, las pruebas de imágenes en Packaging o la preparación PostgreSQL:
 
 ```mermaid
 flowchart LR
@@ -151,7 +151,7 @@ flowchart LR
 
     subgraph S2 ["Stage 2: Quality Gate & SAST"]
         direction TB
-        Tests["🧪 Tests .NET + integración PostgreSQL"]
+        Tests["🧪 Tests unitarios .NET"]
         Coverage["📊 Cobertura"]
         Sonar["🛡️ SonarQube Cloud SAST"]
         Trivy["🔍 Trivy Container Scanner"]
@@ -163,7 +163,9 @@ flowchart LR
 
     subgraph S3 ["Stage 3: Packaging OCI"]
         direction TB
+        ImageTests["🧪 Integración PostgreSQL<br/>contra imágenes de release"]
         GHCR["📦 Backend, frontend y migrador<br/>mismo SHA en GHCR"]
+        ImageTests --> GHCR
     end
 
     subgraph S4 ["Stage 4: PostgreSQL"]
@@ -184,8 +186,8 @@ flowchart LR
 ```
 
 1. **Versioning** define la etiqueta SemVer y el SHA que producen las imágenes.
-2. **QualityGate** ejecuta análisis y pruebas con PostgreSQL descartable; un fallo bloquea Packaging y despliegue.
-3. **Packaging** publica backend, frontend y migrador del mismo SHA.
+2. **QualityGate** ejecuta pruebas unitarias, análisis y valida el build del frontend; un fallo bloquea Packaging.
+3. **Packaging** construye las imágenes, prueba backend y migraciones en PostgreSQL descartable y solo entonces publica el mismo SHA en GHCR. Reutiliza el frontend compilado por QualityGate.
 4. **PostgreSQL** respalda y migra el esquema en EC2, y publica evidencia.
 5. **CD** despliega la aplicación compatible y verifica readiness.
 

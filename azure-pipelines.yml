@@ -49,9 +49,7 @@ stages:
 
               echo "==> Evaluando estrategia de versionado..."
               SOURCE_BRANCH="$(Build.SourceBranch)"
-              COMMIT_MSG="$(git log -1 --pretty=%B)"
               echo "Rama/Ref: $SOURCE_BRANCH"
-              echo "Último commit: $COMMIT_MSG"
 
               # 1. Si el trigger fue un Tag de Git (ej: v2.1.0), usar ese tag directamente
               if [[ "$SOURCE_BRANCH" == refs/tags/v* ]]; then
@@ -132,6 +130,8 @@ stages:
   - stage: QualityGate
     displayName: '2. Quality Gate & SAST'
     dependsOn: Versioning
+    variables:
+      SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
       # Job A: Calidad y Pruebas Unitarias Backend con SonarQube Cloud
       - job: BackendQuality
@@ -166,7 +166,7 @@ stages:
           # 2. Validación de compilación de Backend (.NET 10)
           - bash: |
               echo "==> Verificando compilación de Backend .NET 10..."
-              dotnet build backend/Backend.csproj -c Release
+              dotnet build tests/Backend.Tests/Backend.Tests.csproj -c Release
             displayName: 'Validar Backend (.NET 10)'
 
           # 3. Ejecución de Pruebas Unitarias (.NET 10 con Cobertura)
@@ -174,6 +174,8 @@ stages:
               echo "==> Ejecutando Pruebas Unitarias en .NET 10..."
               dotnet test tests/Backend.Tests/Backend.Tests.csproj \
                 --configuration Release \
+                --no-build \
+                --no-restore \
                 --logger "trx;LogFileName=test_results.trx" \
                 --results-directory $(Agent.TempDirectory) \
                 --collect:"XPlat Code Coverage" \
@@ -205,26 +207,7 @@ stages:
               pollingTimeoutSec: '300'
             condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/devel'))
 
-      # Job B: Verificación de migraciones incrementales contra PostgreSQL descartable
-      - job: PostgreSQLIntegration
-        displayName: 'PostgreSQL: migraciones incrementales, persistencia y recuperación'
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          - checkout: self
-          - bash: python3 scripts/test-release-reservation.py
-            displayName: 'Verificar reserva persistente entre PostgreSQL y CD'
-          - bash: bash scripts/test-postgresql.sh
-            displayName: 'Probar imágenes reales y bundle EF en PostgreSQL descartable'
-          - task: PublishTestResults@2
-            condition: succeededOrFailed()
-            inputs:
-              testResultsFormat: JUnit
-              testResultsFiles: 'TestResults/postgresql.xml'
-              testRunTitle: 'PostgreSQL / EF / migraciones incrementales'
-              failTaskOnFailedTests: true
-
-      # Job C: Validación de Frontend React y auditoría de vulnerabilidades
+      # Job B: Validación de Frontend React y auditoría de vulnerabilidades
       - job: FrontendAndSecurity
         displayName: 'Frontend React 18 & Auditoría Trivy'
         pool:
@@ -237,7 +220,9 @@ stages:
               echo "==> Verificando dependencias y build de Frontend React..."
               cd frontend
               npm ci
-              npm run build
+              VITE_APP_VERSION="$(SEMVER_TAG)" npm run build
+              tar -czf "$(Pipeline.Workspace)/frontend-dist.tar.gz" -C "$(Build.SourcesDirectory)/frontend" dist
+              echo "##vso[artifact.upload artifactname=frontend-dist;]$(Pipeline.Workspace)/frontend-dist.tar.gz"
             displayName: 'Validar Frontend (React 18 / Vite)'
 
           # 2. Análisis SAST Complementario de Contenedores y Dependencias (Trivy)
@@ -246,7 +231,6 @@ stages:
               curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
               trivy fs --severity HIGH,CRITICAL --exit-code 0 .
             displayName: 'Auditoría SAST (Trivy Security Scanner)'
-            continueOnError: true
 
   # ----------------------------------------------------------------------------
   # STAGE 3: PACKAGING (BUILD & PUSH DE IMÁGENES DOCKER / OCI)
@@ -265,42 +249,74 @@ stages:
           vmImage: 'ubuntu-latest'
         steps:
           - checkout: self
+          - download: current
+            artifact: frontend-dist
+            displayName: 'Descargar frontend validado por Quality Gate'
 
           - bash: |
               set -euo pipefail
               IMAGE_TAG="$(SEMVER_TAG)-build.$(Build.BuildId)"
               SOURCE_COMMIT="$(Build.SourceVersion)"
-              echo "==> Autenticando en GHCR y publicando tag ${IMAGE_TAG}"
-              printf '%s' "$GHCR_PUSH_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+              ARTIFACT_DIR="$(Pipeline.Workspace)/frontend-dist"
+              rm -rf frontend/dist
+              tar -xzf "$ARTIFACT_DIR/frontend-dist.tar.gz" -C frontend
+              [[ -f frontend/dist/index.html ]] || { echo 'Validated frontend artifact has no index.html.' >&2; exit 1; }
+
+              echo "==> Construyendo imágenes OCI ${IMAGE_TAG}"
               docker build \
                 --platform linux/amd64 \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
                 --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
                 -t "$(backendImage):${IMAGE_TAG}" \
                 -f backend/Containerfile backend
-              docker push "$(backendImage):${IMAGE_TAG}"
 
               docker build \
                 --platform linux/amd64 \
+                --build-arg "USE_PREBUILT_DIST=true" \
                 --build-arg "VITE_APP_VERSION=$(SEMVER_TAG)" \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
                 --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
                 -t "$(frontendImage):${IMAGE_TAG}" \
                 -f frontend/Containerfile frontend
-              docker push "$(frontendImage):${IMAGE_TAG}"
 
               docker build --platform linux/amd64 \
                 --label "org.opencontainers.image.source=https://github.com/maxivalenzano/dev-ops-clase-2" \
                 --label "org.opencontainers.image.revision=${SOURCE_COMMIT}" \
                 -t "$(migratorImage):${IMAGE_TAG}" -f backend/Containerfile.migrator .
-              docker push "$(migratorImage):${IMAGE_TAG}"
               bash scripts/build-migration-artifacts.sh
-            displayName: 'Build & Push Backend, Frontend y Migrador del mismo SHA'
+            displayName: 'Build Backend, Frontend y Migrador del mismo SHA'
+            env:
+              RELEASE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
+              MIGRATOR_IMAGE: $(migratorImage)
+          - bash: |
+              set -euo pipefail
+              python3 scripts/test-release-reservation.py
+              bash scripts/test-postgresql.sh
+            displayName: 'Validar reserva y migraciones con imágenes de release'
+            env:
+              BUILD_TEST_IMAGES: 'false'
+              BACKEND_TEST_IMAGE: '$(backendImage):$(SEMVER_TAG)-build.$(Build.BuildId)'
+              MIGRATOR_TEST_IMAGE: '$(migratorImage):$(SEMVER_TAG)-build.$(Build.BuildId)'
+              MIGRATION_MANIFEST: '$(Build.SourcesDirectory)/migration-artifacts/migrations.json'
+          - task: PublishTestResults@2
+            displayName: 'Publicar resultados de pruebas PostgreSQL'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'TestResults/postgresql.xml'
+              testRunTitle: 'PostgreSQL / EF / migraciones incrementales'
+              failTaskOnFailedTests: true
+          - bash: |
+              set -euo pipefail
+              IMAGE_TAG="$(SEMVER_TAG)-build.$(Build.BuildId)"
+              printf '%s' "$GHCR_PUSH_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+              docker push "$(backendImage):${IMAGE_TAG}"
+              docker push "$(frontendImage):${IMAGE_TAG}"
+              docker push "$(migratorImage):${IMAGE_TAG}"
+            displayName: 'Publicar imágenes OCI'
             env:
               GHCR_PUSH_TOKEN: $(GHCR_PUSH_TOKEN)
               GHCR_USERNAME: 'maxivalenzano'
-              RELEASE_TAG: '$(SEMVER_TAG)-build.$(Build.BuildId)'
-              MIGRATOR_IMAGE: $(migratorImage)
           - publish: migration-artifacts
             artifact: migrations
             displayName: 'Publicar bundle, SQL idempotente y manifiesto de migraciones'
@@ -379,7 +395,7 @@ stages:
             deploy:
               steps:
                 - checkout: self
-                  fetchDepth: 0
+                  fetchDepth: 1
 
                 - bash: |
                     set -euo pipefail

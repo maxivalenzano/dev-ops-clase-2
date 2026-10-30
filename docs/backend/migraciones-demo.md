@@ -15,7 +15,7 @@ Una migración describe un cambio versionado del esquema: tablas, columnas, índ
 - `Up` avanza del esquema anterior al nuevo. En P2 agrega `priority` nullable con `DEFAULT 2`.
 - `Down` intenta revertir el cambio definido. Quitar `priority` elimina sus valores; agregarla otra vez no los reconstruye.
 - Ambos son operaciones definidas en la migración; no son un backup ni una reversión transaccional general de la aplicación.
-- El artefacto de migración se genera y revisa en Packaging. Las pruebas automatizadas contra PostgreSQL real descartable se ejecutan con `bash scripts/test-postgresql.sh`.
+- El artefacto de migración se genera en Packaging. La prueba contra PostgreSQL descartable usa las imágenes de release antes de publicarlas; localmente, `bash scripts/test-postgresql.sh` construye sus imágenes de prueba por defecto.
 
 ## Releases históricos P1, P2 y P3
 
@@ -34,8 +34,7 @@ Un default actúa cuando se omite el campo; no reemplaza un NULL explícito. En 
 `azure-pipelines.yml` contiene cinco stages en orden: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`.
 
 - `deployDemo`: booleano, valor predeterminado `false`; debe seleccionarse `true` para solicitar despliegue manual en EC2.
-- `QualityGate` ejecuta [`test-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.sh), que construye una imagen backend y el migrador; [`test-postgresql.py`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.py) prueba el avance incremental contra PostgreSQL descartable.
-- `Packaging` publica backend, frontend y migrador bajo la misma etiqueta/SHA. Además genera `migrations.json` desde los atributos de migración producidos por EF Core; no declara una lista de IDs en YAML.
+- `Packaging` construye backend, frontend y migrador. Ejecuta [`test-release-reservation.py`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-release-reservation.py) y [`test-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.sh) contra esas mismas imágenes antes de publicarlas; [`test-postgresql.py`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/test-postgresql.py) prueba el avance incremental en PostgreSQL descartable. Luego publica backend, frontend y migrador con la misma etiqueta/SHA y genera `migrations.json` desde los atributos EF Core.
 - `PostgreSQL` ejecuta [`prepare-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/prepare-postgresql.sh), incluyendo respaldo con [`backup-postgresql.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/backup-postgresql.sh), y corre el bundle sin argumento de destino. EF aplica en orden todas las migraciones pendientes hasta la última del build.
 - Los historiales del build y de la base deben compartir una cadena completa de prefijo. Si la base ya está más avanzada, se conserva y no se ejecutan `Down`; después, el stage verifica que estén aplicadas todas las migraciones del build y publica ambos historiales.
 - `CD` ejecuta [`deploy-ec2.sh`](https://github.com/maxivalenzano/dev-ops-clase-2/blob/bdb2dca0e02a06e05378aba6741a3c01b14f917f/scripts/deploy-ec2.sh), consume el recibo de `BUILD_ID`, `IMAGE_TAG`, `SOURCE_COMMIT` y esquema verificado, y no vuelve a migrar.
@@ -44,8 +43,8 @@ Para agregar un cambio de esquema, actualizar el modelo y generar una migración
 
 ```mermaid
 flowchart LR
-  V[Versioning] --> Q[QualityGate<br/>PostgreSQL descartable]
-  Q --> P[Packaging<br/>imágenes del mismo SHA]
+  V[Versioning] --> Q[QualityGate<br/>unitarias + frontend + SAST]
+  Q --> P[Packaging<br/>imágenes + PostgreSQL descartable]
   P --> D[PostgreSQL<br/>backup + migración]
   D --> C[CD<br/>verificación de aplicación]
 ```

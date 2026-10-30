@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RUN = 'ef-test-' + uuid.uuid4().hex[:10]
 PG = RUN + '-pg'
 NETWORK = RUN
+BACKEND_TEST_IMAGE = os.environ.get('BACKEND_TEST_IMAGE', 'devops-backend:test')
+MIGRATOR_TEST_IMAGE = os.environ.get('MIGRATOR_TEST_IMAGE', 'devops-migrator:test')
 CONTAINERS = []
 RESULTS = []
 
@@ -106,7 +108,7 @@ def main():
             args = ['docker', 'run', '--rm', '--network', NETWORK,
                     '-v', f'{work / connection}:/run/secrets/db_connection:ro',
                     '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
-                    'devops-migrator:test']
+                    MIGRATOR_TEST_IMAGE]
             if target:
                 args.append(target)
             return command(*args, check=check)
@@ -118,7 +120,7 @@ def main():
                     '-p', '127.0.0.1::3000', '-e', 'INSTANCE_NAME=' + name,
                     '-v', f'{work / "app"}:/run/secrets/db_connection:ro',
                     '-e', 'DATABASE_CONNECTION_FILE=/run/secrets/db_connection',
-                    'devops-backend:test')
+                    BACKEND_TEST_IMAGE)
             CONTAINERS.append(name)
             binding = json.loads(command('docker', 'inspect', name).stdout)[0]
             port = binding['NetworkSettings']['Ports']['3000/tcp'][0]['HostPort']
@@ -233,7 +235,7 @@ def main():
 
         def sql_artifact():
             name = RUN + '-sql-artifact'
-            command('docker', 'create', '--name', name, 'devops-migrator:test')
+            command('docker', 'create', '--name', name, MIGRATOR_TEST_IMAGE)
             try:
                 command('docker', 'cp', name + ':/artifacts/forward.sql', str(work / 'forward.sql'))
             finally:

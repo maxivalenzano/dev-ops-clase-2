@@ -5,14 +5,15 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --no-audit --no-fund
+ARG USE_PREBUILT_DIST=false
+RUN if [ "$USE_PREBUILT_DIST" != "true" ]; then npm ci --no-audit --no-fund; fi
 
 COPY . .
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 ARG VITE_APP_VERSION="2.0.0"
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
-RUN npm run build
+RUN if [ "$USE_PREBUILT_DIST" != "true" ]; then npm run build; fi
 
 # Stage 2: Production Nginx web server (~25MB total image size)
 FROM nginx:alpine AS runner

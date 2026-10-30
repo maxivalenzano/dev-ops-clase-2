@@ -15,7 +15,7 @@ Nginx balancea tráfico entre réplicas. PostgreSQL y los servicios de aplicaci�
 
 ## Pipeline y verificación
 
-Azure Pipelines ejecuta cinco stages: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`. Packaging publica un manifiesto derivado del historial EF del build. PostgreSQL valida que ambos historiales compartan una cadena de prefijo y ejecuta el bundle sin destino cuando la base está atrasada; si ya está más avanzada, la conserva. Nunca ejecuta `Down`. P1/P2/P3 y build91 son evidencia de despliegues históricos; ya no son fases de ejecución del pipeline.
+Azure Pipelines ejecuta cinco stages: `Versioning`, `QualityGate`, `Packaging`, `PostgreSQL` y `CD`. Packaging prueba las imágenes construidas contra PostgreSQL descartable antes de publicarlas y reutiliza el `dist` del frontend validado por QualityGate. También publica un manifiesto derivado del historial EF del build. PostgreSQL valida que ambos historiales compartan una cadena de prefijo y ejecuta el bundle sin destino cuando la base está atrasada; si ya está más avanzada, la conserva. Nunca ejecuta `Down`. P1/P2/P3 y build91 son evidencia de despliegues históricos; ya no son fases de ejecución del pipeline.
 
 La integración local contra PostgreSQL descartable requiere Linux y Docker:
 
