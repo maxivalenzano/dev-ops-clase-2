@@ -138,7 +138,7 @@ Haz clic en la pestaña **Laboratorio de Caos** para probar la robustez de Nginx
 
 ## 🔄 4. Pipeline CI/CD y DevSecOps
 
-El pipeline actual de **Azure DevOps** (`azure-pipelines.yml`) tiene cinco stages y bloquea el despliegue cuando falla QualityGate, las pruebas de imágenes en Packaging o la preparación PostgreSQL:
+El pipeline de **Azure DevOps** (`azure-pipelines.yml`) separa CI automático (stages 1–3) de entrega manual a EC2 (stages 4–5). Publicar imágenes no modifica la base ni reemplaza los contenedores desplegados. QualityGate, las pruebas de imágenes en Packaging y la preparación PostgreSQL bloquean la promoción si fallan:
 
 ```mermaid
 flowchart LR
@@ -168,11 +168,11 @@ flowchart LR
         ImageTests --> GHCR
     end
 
-    subgraph S4 ["Stage 4: PostgreSQL"]
+    subgraph S4 ["Stage 4: CD de base de datos — manual"]
         direction TB
         DB["☁️ EC2: backup, migración<br/>y validación de esquema"]
     end
-    subgraph S5 ["Stage 5: CD"]
+    subgraph S5 ["Stage 5: CD de aplicación — manual"]
         VM["☁️ EC2: despliegue de aplicación"]
         Smoke["🩺 Readiness y verificación"]
     end
@@ -181,15 +181,18 @@ flowchart LR
     S1 --> S2
     Gate -->|"Quality Gate: PASA"| S3
     Gate -.->|"Fallo de Calidad"| Abort["❌ Abortar Pipeline (Fail-Fast)"]
-    S3 --> S4 --> S5
+    S3 -->|"Inicio manual: autorizar cambio de base"| S4
+    S4 -->|"Verificar e iniciar manualmente la aplicación"| S5
     VM --> Smoke
 ```
 
 1. **Versioning** define la etiqueta SemVer y el SHA que producen las imágenes.
 2. **QualityGate** ejecuta pruebas unitarias, análisis y valida el build del frontend; un fallo bloquea Packaging.
 3. **Packaging** construye las imágenes, prueba backend y migraciones en PostgreSQL descartable y solo entonces publica el mismo SHA en GHCR. Reutiliza el frontend compilado por QualityGate.
-4. **PostgreSQL** respalda y migra el esquema en EC2, y publica evidencia.
-5. **CD** despliega la aplicación compatible y verifica readiness.
+4. **PostgreSQL — manual, parte de CD:** después de iniciarlo explícitamente, respalda y migra el esquema en EC2, verifica la aplicación anterior y publica evidencia. El procedimiento actual pausa los backends durante backup/migración.
+5. **CD — manual:** requiere un segundo inicio explícito y PostgreSQL exitoso en el mismo build; despliega la aplicación compatible y verifica readiness. No vuelve a aplicar migraciones.
+
+Los stages 1–4 no se pueden omitir desde la selección de stages. PostgreSQL exige resultados `Succeeded` de QualityGate y Packaging. Los dos stages de entrega usan `trigger: manual`; `deployDemo` solamente habilita ramas de demostración, no inicia ni aprueba esos stages. Las aprobaciones y checks adicionales del Environment se administran en Azure DevOps y siguen siendo aplicables.
 
 El pipeline no selecciona fases ni IDs de migración. Packaging genera un manifiesto desde las migraciones EF del código; PostgreSQL aplica en orden todas las que falten hasta la última incluida en ese build. Los releases P1/P2/P3 que aparecen en la bitácora son evidencia histórica, no parámetros del pipeline.
 
@@ -205,7 +208,17 @@ Los secretos `GHCR_PUSH_TOKEN`, `GHCR_PULL_TOKEN` y `GITHUB_RELEASE_TOKEN` ya es
 
 ### Despliegue en EC2 mediante Azure Pipelines
 
-El flujo tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL → CD`. Para solicitar un despliegue manual en EC2, iniciar una ejecución desde Azure DevOps con `deployDemo=true`. No hay selector de fase ni destino de migración: una base nueva recibe todas las migraciones y una existente avanza solo por las pendientes. P3 (`3.1.6-build.91`) es el último despliegue documentado; ver la [bitácora histórica](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
+El flujo tiene cinco stages: `Versioning → QualityGate → Packaging → PostgreSQL (manual) → CD (manual)`.
+
+1. Ejecutar CI en `main` o `devel`. Para otra rama, iniciar el pipeline manualmente con `deployDemo=true`. Las pull requests no habilitan la entrega a EC2.
+2. Esperar el éxito de los tres stages de CI y revisar los artefactos publicados. Hasta aquí no se ejecuta ningún job sobre EC2.
+3. Iniciar manualmente **4. CD manual: PostgreSQL y migraciones EF** en esa ejecución. Este paso sí modifica la base desplegada y puede iniciar/configurar PostgreSQL mediante el coordinador existente `prepare-postgresql.sh`.
+4. Revisar el recibo `postgresql-evidence`, consultar el esquema desde VS Code y comprobar lecturas/escrituras de la aplicación anterior. La aplicación nueva todavía no se desplegó.
+5. Iniciar manualmente **5. CD manual: aplicación en EC2** en la misma ejecución. Se exige el recibo del mismo BuildId/SHA; no iniciar un build distinto para completar este paso.
+
+Entre los stages 4 y 5 se conserva la reserva de release en EC2: otros builds no pueden modificar ese entorno. Si se cancela o se decide no completar CD después de migrar, inspeccionar el esquema, el recibo y los contenedores activos antes de liberar la reserva con `scripts/release-reservation.sh --after-inspection`, proporcionando los valores originales de `BUILD_ID`, `SOURCE_COMMIT` e `IMAGE_TAG`. Liberar la reserva no revierte el esquema ni los datos. En una primera instalación, no dejar el flujo detenido entre ambos stages: todavía puede no existir una aplicación operativa. Ver [operación del pipeline](docs/pipeline-entrega-manual.md).
+
+No hay selector de fase ni destino de migración: una base nueva recibe todas las migraciones y una existente avanza solo por las pendientes. P3 (`3.1.6-build.91`) es el último despliegue documentado; ver la [bitácora histórica](docs/bitacora/2026-10-25-postgresql-ef-migraciones.md).
 
 ### Pruebas locales de integración
 

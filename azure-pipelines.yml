@@ -1,19 +1,20 @@
 # ==============================================================================
 # Pipeline CI/CD Multi-Stage - DevOps Lab
 # ==============================================================================
-# Flujo desacoplado en 5 Stages:
+# CI automático (stages 1-3) y entrega manual (stages 4-5):
 # 1. Versioning: Cálculo automático de SemVer mediante Conventional Commits.
 # 2. Quality Gate: Pruebas unitarias (.NET 10 xUnit), Cobertura, SonarQube Cloud SAST y Trivy.
 # 3. Packaging: Build y publicación OCI obligatoria en GHCR.
-# 4. PostgreSQL: backup, migración EF y comprobación de esquema.
-# 5. CD: Despliegue continuo en EC2 mediante Docker Compose.
+# 4. PostgreSQL: inicio manual; backup, migración EF y comprobación de esquema en EC2.
+# 5. CD: inicio manual independiente; despliegue de aplicación en EC2 mediante Docker Compose.
+# Publicar imágenes no autoriza cambios en EC2. Ambos stages de entrega requieren acción del operador.
 # ==============================================================================
 
 name: $(Date:yyyyMMdd)$(Rev:.r)
 
 parameters:
   - name: deployDemo
-    displayName: 'Desplegar manualmente esta rama en EC2 para la demostración'
+    displayName: 'Habilitar stages manuales de EC2 para esta rama de demostración'
     type: boolean
     default: false
 trigger:
@@ -35,6 +36,7 @@ stages:
   # ----------------------------------------------------------------------------
   - stage: Versioning
     displayName: '1. Semantic Versioning'
+    isSkippable: false
     jobs:
       - job: CalculateSemVer
         displayName: 'Calcular Versión SemVer'
@@ -129,6 +131,7 @@ stages:
   # ----------------------------------------------------------------------------
   - stage: QualityGate
     displayName: '2. Quality Gate & SAST'
+    isSkippable: false
     dependsOn: Versioning
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
@@ -237,6 +240,7 @@ stages:
   # ----------------------------------------------------------------------------
   - stage: Packaging
     displayName: '3. Packaging: Build & Push OCI'
+    isSkippable: false
     dependsOn:
       - Versioning
       - QualityGate
@@ -322,14 +326,17 @@ stages:
             displayName: 'Publicar bundle, SQL idempotente y manifiesto de migraciones'
 
   # ----------------------------------------------------------------------------
-  # STAGE 4: POSTGRESQL - PREPARACIÓN, BACKUP Y MIGRACIONES EF
+  # STAGE 4: ENTREGA MANUAL DE BASE DE DATOS (NO ES CI)
   # ----------------------------------------------------------------------------
   - stage: PostgreSQL
-    displayName: '4. PostgreSQL: preparación y migraciones EF'
+    displayName: '4. CD manual: PostgreSQL y migraciones EF'
+    trigger: manual
+    isSkippable: false
     dependsOn:
       - Versioning
+      - QualityGate
       - Packaging
-    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/devel'), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), and(eq(variables['Build.Reason'], 'Manual'), ${{ eq(parameters.deployDemo, true) }})), ne(variables['Build.Reason'], 'PullRequest'))
+    condition: and(succeeded(), eq(dependencies.QualityGate.result, 'Succeeded'), eq(dependencies.Packaging.result, 'Succeeded'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), eq(variables['Build.SourceBranch'], 'refs/heads/devel'), startsWith(variables['Build.SourceBranch'], 'refs/tags/v'), and(eq(variables['Build.Reason'], 'Manual'), ${{ eq(parameters.deployDemo, true) }})), ne(variables['Build.Reason'], 'PullRequest'))
     variables:
       SEMVER_TAG: $[ stageDependencies.Versioning.CalculateSemVer.outputs['VersionOutput.SEMVER_TAG'] ]
     jobs:
@@ -372,10 +379,12 @@ stages:
                   condition: succeededOrFailed()
 
   # ----------------------------------------------------------------------------
-  # STAGE 5: ENTREGA CONTINUA (CD) - DESPLIEGUE A EC2
+  # STAGE 5: ENTREGA MANUAL DE APLICACIÓN - MISMO BUILD QUE POSTGRESQL
+  # No inicia al terminar PostgreSQL: permite verificar la app anterior antes de desplegar.
   # ----------------------------------------------------------------------------
   - stage: CD
-    displayName: '5. CD: Despliegue en EC2'
+    displayName: '5. CD manual: aplicación en EC2'
+    trigger: manual
     dependsOn:
       - Versioning
       - Packaging
