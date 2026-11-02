@@ -222,8 +222,7 @@ No hay selector de fase ni destino de migración: una base nueva recibe todas la
 
 ### Pruebas locales de integración
 
-En un entorno Linux con Docker disponible, ejecuta el script de integración. Construye una imagen backend y el migrador, y prueba la aplicación incremental contra PostgreSQL descartable; no usa la base EC2:
-
+En un entorno Linux con Docker disponible, ejecuta el script de integración. Construye una imagen backend y el migrador, y prueba las migraciones contra PostgreSQL descartable; no usa la base EC2.
 ```bash
 bash scripts/test-postgresql.sh
 ```
