@@ -30,7 +30,9 @@ namespace Backend.Migrations
                         .HasJsonPropertyName("id");
 
                     b.Property<string>("Category")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("text")
+                        .HasDefaultValue("general")
                         .HasColumnName("category")
                         .HasJsonPropertyName("category");
 
