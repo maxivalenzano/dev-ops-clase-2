@@ -330,7 +330,6 @@ stages:
   # ----------------------------------------------------------------------------
   - stage: PostgreSQL
     displayName: '4. CD manual: PostgreSQL y migraciones EF'
-    trigger: manual
     isSkippable: false
     dependsOn:
       - Versioning
@@ -384,7 +383,6 @@ stages:
   # ----------------------------------------------------------------------------
   - stage: CD
     displayName: '5. CD manual: aplicación en EC2'
-    trigger: manual
     dependsOn:
       - Versioning
       - Packaging
