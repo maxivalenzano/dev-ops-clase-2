@@ -30,6 +30,7 @@ namespace Backend.Migrations
                         .HasJsonPropertyName("id");
 
                     b.Property<string>("Category")
+                        .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("text")
                         .HasDefaultValue("general")
@@ -69,6 +70,8 @@ namespace Backend.Migrations
 
                     b.ToTable("tasks", null, t =>
                         {
+                            t.HasCheckConstraint("ck_tasks_category", "category IN ('general', 'infraestructura', 'seguridad')");
+
                             t.HasCheckConstraint("ck_tasks_priority", "priority BETWEEN 1 AND 3");
                         });
                 });

@@ -23,7 +23,7 @@ public class TaskItem
     public int? Priority { get; set; } = 2;
 
     [JsonPropertyName("category")]
-    public string? Category { get; set; }
+    public string Category { get; set; } = "general";
 
     public TaskItem()
     {

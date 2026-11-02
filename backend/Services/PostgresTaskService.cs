@@ -36,7 +36,7 @@ public sealed class PostgresTaskService(AppDbContext db) : ITaskService
         return new TaskItem(reader.GetGuid(0).ToString(), reader.GetString(1), reader.GetBoolean(2), reader.GetString(3), reader.GetDateTime(4))
         {
             Priority = reader.GetInt32(5),
-            Category = reader.IsDBNull(6) ? null : reader.GetString(6)
+            Category = reader.GetString(6)
         };
     }
 

@@ -18,7 +18,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         entity.Property(x => x.CreatedByNode).HasColumnName("created_by_node").IsRequired();
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         entity.Property(x => x.Priority).HasColumnName("priority").HasDefaultValue(2).IsRequired();
-        entity.Property(x => x.Category).HasColumnName("category").HasColumnType("text").HasDefaultValue("general");
+        entity.Property(x => x.Category).HasColumnName("category").HasColumnType("text").HasDefaultValue("general").IsRequired();
         entity.ToTable(t => t.HasCheckConstraint("ck_tasks_priority", "priority BETWEEN 1 AND 3"));
+        entity.ToTable(t => t.HasCheckConstraint("ck_tasks_category", "category IN ('general', 'infraestructura', 'seguridad')"));
     }
 }
