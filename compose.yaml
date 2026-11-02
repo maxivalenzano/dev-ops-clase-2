@@ -137,24 +137,7 @@ services:
     networks:
       - lab-network
 
-  # 4. In-Memory Task Store & Cache (Redis)
-  redis:
-    image: redis:7-alpine
-    container_name: lab-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 5s
-    volumes:
-      - redis-data:/data
-    networks:
-      - lab-network
-
-  # 5. Visual Container Management UI (Portainer CE)
+  # 4. Visual Container Management UI (Portainer CE)
   portainer:
     image: portainer/portainer-ce:latest
     container_name: lab-portainer
@@ -173,7 +156,6 @@ networks:
     driver: bridge
 
 volumes:
-  redis-data:
   portainer-data:
 
 secrets:

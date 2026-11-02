@@ -1,4 +1,4 @@
-"""Verify the ten durable services and PostgreSQL persistence; resilience is opt-in."""
+"""Verify the nine durable services and PostgreSQL persistence; resilience is opt-in."""
 import argparse
 import concurrent.futures
 import json
@@ -58,7 +58,7 @@ def main():
                '-f', str(directory / 'compose.yaml'), '-p', 'devops-lab']
     data_compose = ['docker', 'compose', '-p', 'devops-data',
                     '-f', str(directory / 'data' / 'compose.data.yaml')]
-    expected = {'nginx', 'redis', 'portainer',
+    expected = {'nginx', 'portainer',
                 *[f'backend-{i}' for i in range(1, 4)],
                 *[f'frontend-{i}' for i in range(1, 4)]}
     backends = [f'backend-{i}' for i in range(1, 4)]
@@ -68,7 +68,6 @@ def main():
         assert running == expected, f'Running services: {sorted(running)}'
         assert set(run(*data_compose, 'ps', '--status', 'running', '--services').splitlines()) == {'postgres'}
         assert run('docker', 'inspect', 'lab-postgres', '--format', '{{.State.OOMKilled}}') == 'false'
-        assert run('docker', 'exec', 'lab-redis', 'redis-cli', 'ping') == 'PONG'
         assert sql('SELECT current_database();') == 'devops'
         for service in backends:
             assert internal(service, '/api/health')['status'] == 'UP'
@@ -77,7 +76,7 @@ def main():
             request(path)
 
     wait_for(ready)
-    print('PASS: ten durable services, authenticated PostgreSQL and readiness on three backends.')
+    print('PASS: nine durable services, authenticated PostgreSQL and readiness on three backends.')
     task_id = None
     stopped = False
     database_stopped = False

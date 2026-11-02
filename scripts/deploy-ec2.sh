@@ -15,15 +15,11 @@ finish() {
       rollback "$failed_status"
     else
       # Preflight did not mutate application files. An existing healthy PG app may continue.
-      if [[ -f "$deploy_dir/deployment.json" ]] && python3 - "$deploy_dir/deployment.json" <<'PY'
-import json,sys
-raise SystemExit(0 if json.load(open(sys.argv[1])).get('storage')=='postgresql' else 1)
-PY
-      then
+      if [[ -f "$deploy_dir/deployment.json" ]]; then
         release_reservation || true
         echo 'CD preflight failed; previous PostgreSQL application unchanged.' >&2
       else
-        echo 'CD preflight failed during first cutover; writers remain paused and reservation retained.' >&2
+        echo 'CD preflight failed before initial deployment; writers remain paused and reservation retained.' >&2
       fi
     fi
   fi
@@ -58,17 +54,11 @@ fi
 rollback() {
   failed_status="$1"
   echo 'CD verification failed. Trying the previous application against the migrated schema.' >&2
-  if [[ -n "$previous" && -f "$previous/deployment.json" ]] && \
-    python3 - "$previous/deployment.json" <<'PY'
-import json,sys
-x=json.load(open(sys.argv[1]))
-raise SystemExit(0 if x.get('storage')=='postgresql' else 1)
-PY
-  then
+  if [[ -n "$previous" && -f "$previous/deployment.json" ]]; then
     if cp "$previous/.env" "$previous/compose.yaml" "$deploy_dir/" && \
        cat "$previous/nginx/nginx.conf" >"$deploy_dir/nginx/nginx.conf" && \
        cp "$previous/deployment.json" "$deploy_dir/" && \
-       compose_app up -d --no-build && compose_app up -d --no-build --force-recreate nginx && \
+       compose_app up -d --no-build --remove-orphans && compose_app up -d --no-build --force-recreate nginx && \
        DEPLOY_DIR="$deploy_dir" python3 "$source_dir/scripts/verify-deployment.py"; then
       release_reservation
       echo 'Previous compatible PostgreSQL application restored; schema and persistent data retained.' >&2
@@ -78,7 +68,7 @@ PY
     fi
   else
     docker stop lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null 2>&1 || true
-    echo 'No compatible PostgreSQL baseline. Writers stopped; repair forward. Redis rollback is not automatic.' >&2
+    echo 'No previous deployment baseline. Writers stopped; repair forward.' >&2
   fi
 }
 mkdir -p "$deploy_dir/nginx" "$deploy_dir/scripts"
@@ -86,7 +76,7 @@ cp "$staging/compose.yaml" "$staging/.env" "$deploy_dir/"
 cat "$staging/nginx/nginx.conf" >"$deploy_dir/nginx/nginx.conf"
 cp "$source_dir/scripts/verify-deployment.sh" "$source_dir/scripts/verify-deployment.py" "$deploy_dir/scripts/"
 # Explicit application services; persistent PostgreSQL belongs to devops-data.
-compose_app up -d --no-build
+compose_app up -d --no-build --remove-orphans
 compose_app up -d --no-build --force-recreate nginx
 DEPLOY_DIR="$deploy_dir" python3 "$deploy_dir/scripts/verify-deployment.py"
 python3 - "$receipt" "$deploy_dir/deployment.json" <<'PY'

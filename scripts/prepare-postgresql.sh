@@ -3,7 +3,6 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib-postgresql.sh"
 reserve_release
 started=$SECONDS
-first_cutover=false
 writers_paused=false
 prepared=false
 migration_started=false
@@ -80,13 +79,6 @@ bash "$source_dir/scripts/provision-postgresql.sh"
 [[ "$(sql 'SELECT current_database();')" == devops ]]
 before="$(schema)"
 if [[ "$before" != 0 ]]; then validate_schema; fi
-if [[ ! -f "$deploy_dir/deployment.json" ]] || ! python3 - "$deploy_dir/deployment.json" <<'PY'
-import json,sys
-raise SystemExit(0 if json.load(open(sys.argv[1])).get('storage') == 'postgresql' else 1)
-PY
-then
-  first_cutover=true
-fi
 # Pause writers while taking the backup and applying the ordered migration bundle.
 docker stop lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null 2>&1 || true
 writers_paused=true
@@ -107,14 +99,7 @@ after="$(schema)"
 validate_complete_schema
 after_history="$(migration_history)"
 sql 'REVOKE INSERT,UPDATE,DELETE ON "__EFMigrationsHistory" FROM devops_app;' >/dev/null
-if [[ "$first_cutover" == true ]]; then
-  if docker inspect lab-redis >/dev/null 2>&1; then
-    docker exec lab-redis redis-cli SAVE >/dev/null
-    python3 "$source_dir/scripts/import-redis-tasks.py" "$backup/redis-tasks.json"
-  else
-    [[ "$(sql 'SELECT count(*) FROM tasks;')" == 0 ]]
-  fi
-else
+if docker inspect lab-backend-1 >/dev/null 2>&1; then
   docker start lab-backend-1 lab-backend-2 lab-backend-3 >/dev/null
   writers_paused=false
   python3 - <<'PY'
@@ -140,13 +125,13 @@ PY
 fi
 # Authenticated SQL using the restricted application role, not only pg_isready.
 docker exec lab-postgres bash -c 'export PGPASSWORD="$(cat /run/secrets/app_password)"; psql -X -qAt -v ON_ERROR_STOP=1 -h127.0.0.1 -U devops_app -d devops -c "SELECT count(*) FROM tasks;"' >/dev/null
-export SCHEMA_BEFORE="$before" SCHEMA_AFTER="$after" BACKUP_PATH="$backup" FIRST_CUTOVER="$first_cutover"
+export SCHEMA_BEFORE="$before" SCHEMA_AFTER="$after" BACKUP_PATH="$backup"
 export MIGRATIONS_BEFORE="$before_history" MIGRATIONS_AFTER="$after_history"
 export DURATION_SECONDS="$((SECONDS-started))" TASK_COUNT="$(sql 'SELECT count(*) FROM tasks;')"
 export MIGRATOR_DIGEST="$(docker image inspect "$MIGRATOR_IMAGE:$IMAGE_TAG" --format '{{index .RepoDigests 0}}')"
 python3 - "$receipt" <<'PY'
 import datetime,json,os,pathlib,sys
-x={k.lower():os.environ[k] for k in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG','SCHEMA_BEFORE','SCHEMA_AFTER','BACKUP_PATH','FIRST_CUTOVER','MIGRATOR_DIGEST')}
+x={k.lower():os.environ[k] for k in ('BUILD_ID','SOURCE_COMMIT','IMAGE_TAG','SCHEMA_BEFORE','SCHEMA_AFTER','BACKUP_PATH','MIGRATOR_DIGEST')}
 x.update(result='passed', duration_seconds=int(os.environ['DURATION_SECONDS']), task_count=int(os.environ['TASK_COUNT']), prepared_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
 x.update(migrations_before=os.environ['MIGRATIONS_BEFORE'].splitlines(),
          migrations_after=os.environ['MIGRATIONS_AFTER'].splitlines(),
@@ -165,7 +150,6 @@ if [[ -n "${BACKUP_EXPORT_DIR:-}" ]]; then
   mkdir -p "$BACKUP_EXPORT_DIR"
   cp "$backup/database.dump" "$backup/database.sha256" "$backup/source.fingerprint" "$backup/roles.sql" "$backup/verification.json" "$BACKUP_EXPORT_DIR/"
   cp "$receipt" "$BACKUP_EXPORT_DIR/receipt.json"
-  if [[ -f "$backup/redis-tasks.json" ]]; then cp "$backup/redis-tasks.json" "$BACKUP_EXPORT_DIR/"; fi
   chmod 600 "$BACKUP_EXPORT_DIR/"*
 fi
 prepared=true
