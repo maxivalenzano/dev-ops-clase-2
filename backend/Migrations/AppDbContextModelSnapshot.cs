@@ -29,6 +29,11 @@ namespace Backend.Migrations
                         .HasColumnName("id")
                         .HasJsonPropertyName("id");
 
+                    b.Property<string>("Category")
+                        .HasColumnType("text")
+                        .HasColumnName("category")
+                        .HasJsonPropertyName("category");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")

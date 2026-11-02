@@ -29,13 +29,14 @@ public sealed class PostgresTaskService(AppDbContext db) : ITaskService
         await using var command = db.Database.GetDbConnection().CreateCommand();
         // RETURNING returns the value committed by this atomic statement, even under concurrent toggles.
         command.CommandText = "UPDATE tasks SET is_completed = NOT is_completed WHERE id = @id " +
-                              "RETURNING id, title, is_completed, created_by_node, created_at, priority";
+                              "RETURNING id, title, is_completed, created_by_node, created_at, priority, category";
         command.Parameters.Add(new NpgsqlParameter("id", uuid));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken)) return null;
         return new TaskItem(reader.GetGuid(0).ToString(), reader.GetString(1), reader.GetBoolean(2), reader.GetString(3), reader.GetDateTime(4))
         {
-            Priority = reader.GetInt32(5)
+            Priority = reader.GetInt32(5),
+            Category = reader.IsDBNull(6) ? null : reader.GetString(6)
         };
     }
 
